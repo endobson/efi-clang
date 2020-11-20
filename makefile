@@ -1,8 +1,8 @@
 
 cc = clang
-cflags = -I efi -target x86_64-pc-win32-coff -fno-stack-protector -fshort-wchar -mno-red-zone
+cflags = -I efi -target x86_64-pc-win32-coff -fno-stack-protector -fshort-wchar -mno-red-zone -Brepro
 ld = lld-link
-lflags = -subsystem:efi_application -nodefaultlib -dll
+lflags = -subsystem:efi_application -nodefaultlib -dll -timestamp:12345
 
 all : hello-c.efi memmap.efi hello-fasm.efi
 
@@ -16,7 +16,7 @@ memmap.efi : memmap.obj
 	$(ld) $(lflags) -entry:efi_main $< -out:$@
 
 hello-fasm.obj : hello-fasm.asm
-	fasm $<
+	nasm -f win64 $< -o hello-fasm.obj
 
 hello-c.obj : hello-c.c
 	$(cc) $(cflags) -c $< -o $@
