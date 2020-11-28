@@ -2,17 +2,15 @@
 #include "efi.h"
 
 
-EFI_HANDLE          image_handle;
-EFI_SYSTEM_TABLE    *system_table;
 
-CHAR16              *hello_str = L"Hello, you slab of warm meat!\r\n";
-CHAR16              *newline = L"\r\n";
+CHAR16* hello_str = L"Hello, you slab of warm meat!\r\n";
+CHAR16* newline = L"\r\n";
 
 
-EFI_STATUS efi_main(EFI_HANDLE ih, EFI_SYSTEM_TABLE *st) 
+EFI_STATUS efi_main(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st) 
 {
-    image_handle = ih;
-    system_table = st;
+    EFI_HANDLE image_handle = ih;
+    EFI_SYSTEM_TABLE* system_table = st;
     CHAR16 chars[3];
     chars[0] = 0;
     chars[1] = 0;
