@@ -1,6 +1,7 @@
 
 cc = clang
-cflags = -I efi -target x86_64-pc-win32-coff -fno-stack-protector -fshort-wchar -mno-red-zone -Brepro
+cflags = -I efi -target x86_64-pc-win32-coff -fno-stack-protector -fshort-wchar -mno-red-zone -Brepro \
+         -fno-unwind-tables
 ld = lld-link
 lflags = -subsystem:efi_application -nodefaultlib -dll -timestamp:12345
 
