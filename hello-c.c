@@ -1,157 +1,8 @@
 #include "efi.h"
+#include "efi_util.h"
 #include "primitives.h"
 #include "serial.h"
-
-CHAR16 nibble_to_hexchar16(uint8_t v) {
-  switch (v) {
-    case 0: return L'0';
-    case 1: return L'1';
-    case 2: return L'2';
-    case 3: return L'3';
-    case 4: return L'4';
-    case 5: return L'5';
-    case 6: return L'6';
-    case 7: return L'7';
-    case 8: return L'8';
-    case 9: return L'9';
-    case 10: return L'a';
-    case 11: return L'b';
-    case 12: return L'c';
-    case 13: return L'd';
-    case 14: return L'e';
-    case 15: return L'f';
-  }
-  return L'X';
-}
-
-char nibble_to_hexchar(uint8_t v) {
-  switch (v) {
-    case 0: return L'0';
-    case 1: return L'1';
-    case 2: return L'2';
-    case 3: return L'3';
-    case 4: return L'4';
-    case 5: return L'5';
-    case 6: return L'6';
-    case 7: return L'7';
-    case 8: return L'8';
-    case 9: return L'9';
-    case 10: return L'a';
-    case 11: return L'b';
-    case 12: return L'c';
-    case 13: return L'd';
-    case 14: return L'e';
-    case 15: return L'f';
-  }
-  return L'X';
-}
-
-
-void byte_to_hex(uint8_t v, CHAR16* chars) {
-  chars[0] = nibble_to_hexchar16((v >> 4) & 0xF);
-  chars[1] = nibble_to_hexchar16((v >> 0) & 0xF);
-}
-
-void byte_to_hex2(uint8_t v, char* chars) {
-  chars[0] = nibble_to_hexchar((v >> 4) & 0xF);
-  chars[1] = nibble_to_hexchar((v >> 0) & 0xF);
-}
-
-void guid_to_hex(EFI_GUID guid, CHAR16* chars) {
-  byte_to_hex((guid.Data1 >> 24) & 0xff, &chars[0]);
-  byte_to_hex((guid.Data1 >> 16) & 0xff, &chars[2]);
-  byte_to_hex((guid.Data1 >> 8)  & 0xff, &chars[4]);
-  byte_to_hex((guid.Data1 >> 0)  & 0xff, &chars[6]);
-  chars[8] = L'-';
-  byte_to_hex((guid.Data2 >> 8) & 0xff, &chars[9]);
-  byte_to_hex((guid.Data2 >> 0) & 0xff, &chars[11]);
-  chars[13] = L'-';
-  byte_to_hex((guid.Data3 >> 8) & 0xff, &chars[14]);
-  byte_to_hex((guid.Data3 >> 0) & 0xff, &chars[16]);
-  chars[18] = L'-';
-  byte_to_hex(guid.Data4[0], &chars[19]);
-  byte_to_hex(guid.Data4[1], &chars[21]);
-  byte_to_hex(guid.Data4[2], &chars[23]);
-  byte_to_hex(guid.Data4[3], &chars[25]);
-  byte_to_hex(guid.Data4[4], &chars[27]);
-  byte_to_hex(guid.Data4[5], &chars[29]);
-  byte_to_hex(guid.Data4[6], &chars[31]);
-  byte_to_hex(guid.Data4[7], &chars[33]);
-  chars[35] = 0;
-}
-
-CHAR16* hello_str = L"Hello, you slab of warm meat!\r\n";
-CHAR16* newline = L"\r\n";
-
-int guid_equal(EFI_GUID g1, EFI_GUID g2) {
-  return g1.Data1 == g2.Data1 &&
-         g1.Data2 == g2.Data2 &&
-         g1.Data3 == g2.Data3 &&
-         g1.Data4[0] == g2.Data4[0] &&
-         g1.Data4[1] == g2.Data4[1] &&
-         g1.Data4[2] == g2.Data4[2] &&
-         g1.Data4[3] == g2.Data4[3] &&
-         g1.Data4[4] == g2.Data4[4] &&
-         g1.Data4[5] == g2.Data4[5] &&
-         g1.Data4[6] == g2.Data4[6] &&
-         g1.Data4[7] == g2.Data4[7];
-}
-
-void writer_add_cstr(char** writer, char* str) {
-  while (*str != 0) {
-    **writer = *str;
-    (*writer)++;
-    str++;
-  }
-}
-
-void writer_add_bytes(char** writer, char* bytes, int amt) {
-  for (int i = 0; i < amt; i++) {
-    **writer = bytes[i];
-    (*writer)++;
-  }
-}
-
-
-void writer_add_newline(char** writer) {
-  writer_add_cstr(writer, "\r\n");
-}
-
-void writer_terminate(char** writer) {
-  writer_add_bytes(writer, "", 1);
-}
-
-void writer_add_hex8(char** writer, uint8_t v) {
-  char buf[2];
-  byte_to_hex2(v, &buf[0]);
-  writer_add_bytes(writer, buf, 2);
-}
-void writer_add_hex16(char** writer, uint32_t v) {
-  char buf[4];
-  byte_to_hex2((v >> 8)  & 0xff, &buf[0]);
-  byte_to_hex2((v >> 0)  & 0xff, &buf[2]);
-  writer_add_bytes(writer, buf, 4);
-}
-void writer_add_hex32(char** writer, uint32_t v) {
-  char buf[8];
-  byte_to_hex2((v >> 24) & 0xff, &buf[0]);
-  byte_to_hex2((v >> 16) & 0xff, &buf[2]);
-  byte_to_hex2((v >> 8)  & 0xff, &buf[4]);
-  byte_to_hex2((v >> 0)  & 0xff, &buf[6]);
-  writer_add_bytes(writer, buf, 8);
-}
-void writer_add_hex64(char** writer, uint64_t v) {
-  char buf[16];
-  byte_to_hex2((v >> 56) & 0xff, &buf[0]);
-  byte_to_hex2((v >> 48) & 0xff, &buf[2]);
-  byte_to_hex2((v >> 40) & 0xff, &buf[4]);
-  byte_to_hex2((v >> 32) & 0xff, &buf[6]);
-  byte_to_hex2((v >> 24) & 0xff, &buf[8]);
-  byte_to_hex2((v >> 16) & 0xff, &buf[10]);
-  byte_to_hex2((v >> 8)  & 0xff, &buf[12]);
-  byte_to_hex2((v >> 0)  & 0xff, &buf[14]);
-  writer_add_bytes(writer, buf, 16);
-}
+#include "strings.h"
 
 
 // ACPI structs
@@ -239,20 +90,6 @@ char buffer_array[4096];
 
 EFI_STATUS efi_main(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st)
 {
-    EFI_RUNTIME_SERVICES* runtime_services = st->RuntimeServices;
-    CHAR16 chars[3];
-    chars[0] = 0;
-    chars[1] = 0;
-    chars[2] = 0;
-
-    for (int i = 1; i <= 4; i++) {
-      chars[0] = i + 64;
-      for (int j = 1; j <= 3; j++) {
-        chars[1] = j + 64;
-        st->ConOut->OutputString(st->ConOut, chars);
-        st->ConOut->OutputString(st->ConOut, newline);
-      }
-    }
     EFI_STATUS s;
 
     void* acpi_table = 0;
@@ -268,17 +105,17 @@ EFI_STATUS efi_main(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st)
       char* char_acpi_table = acpi_table;
       {
         CHAR16 hex_sig[17];
-        byte_to_hex(char_acpi_table[0], &hex_sig[0]);
-        byte_to_hex(char_acpi_table[1], &hex_sig[2]);
-        byte_to_hex(char_acpi_table[2], &hex_sig[4]);
-        byte_to_hex(char_acpi_table[3], &hex_sig[6]);
-        byte_to_hex(char_acpi_table[4], &hex_sig[8]);
-        byte_to_hex(char_acpi_table[5], &hex_sig[10]);
-        byte_to_hex(char_acpi_table[6], &hex_sig[12]);
-        byte_to_hex(char_acpi_table[7], &hex_sig[14]);
+        byte_to_hex_char16(char_acpi_table[0], &hex_sig[0]);
+        byte_to_hex_char16(char_acpi_table[1], &hex_sig[2]);
+        byte_to_hex_char16(char_acpi_table[2], &hex_sig[4]);
+        byte_to_hex_char16(char_acpi_table[3], &hex_sig[6]);
+        byte_to_hex_char16(char_acpi_table[4], &hex_sig[8]);
+        byte_to_hex_char16(char_acpi_table[5], &hex_sig[10]);
+        byte_to_hex_char16(char_acpi_table[6], &hex_sig[12]);
+        byte_to_hex_char16(char_acpi_table[7], &hex_sig[14]);
         hex_sig[16] = 0;
         st->ConOut->OutputString(st->ConOut, hex_sig);
-        st->ConOut->OutputString(st->ConOut, newline);
+        st->ConOut->OutputString(st->ConOut, newline_char16);
       }
       {
         CHAR16 sig[9];
@@ -292,14 +129,14 @@ EFI_STATUS efi_main(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st)
         sig[7] = char_acpi_table[7];
         sig[8] = 0;
         st->ConOut->OutputString(st->ConOut, sig);
-        st->ConOut->OutputString(st->ConOut, newline);
+        st->ConOut->OutputString(st->ConOut, newline_char16);
       }
     }
 
 
     if (acpi_table == 0) {
       st->StdErr->OutputString(st->StdErr, L"Unable to get exit boot services");
-      st->StdErr->OutputString(st->StdErr, newline);
+      st->StdErr->OutputString(st->StdErr, newline_char16);
       return s;
     }
 
@@ -314,19 +151,19 @@ EFI_STATUS efi_main(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st)
     s = st->BootServices->GetMemoryMap(&memory_map_size, memory_map, &memory_map_key, &descriptor_size, &descriptor_version);
     if (s != EFI_BUFFER_TOO_SMALL) {
       st->StdErr->OutputString(st->StdErr, L"Unable to get memory map size");
-      st->StdErr->OutputString(st->StdErr, newline);
+      st->StdErr->OutputString(st->StdErr, newline_char16);
       return s;
     }
     s = st->BootServices->AllocatePool(EfiLoaderData, memory_map_size, (void **)&memory_map);
     if (s != EFI_SUCCESS) {
       st->StdErr->OutputString(st->StdErr, L"Unable to get allocate pool");
-      st->StdErr->OutputString(st->StdErr, newline);
+      st->StdErr->OutputString(st->StdErr, newline_char16);
       return s;
     }
     s = st->BootServices->GetMemoryMap(&memory_map_size, memory_map, &memory_map_key, &descriptor_size, &descriptor_version);
     if (s != EFI_SUCCESS) {
       st->StdErr->OutputString(st->StdErr, L"Unable to get memory map");
-      st->StdErr->OutputString(st->StdErr, newline);
+      st->StdErr->OutputString(st->StdErr, newline_char16);
       return s;
     }
 
@@ -334,7 +171,7 @@ EFI_STATUS efi_main(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st)
     s = st->BootServices->ExitBootServices(ih, memory_map_key);
     if (s != EFI_SUCCESS) {
       st->StdErr->OutputString(st->StdErr, L"Unable to get exit boot services");
-      st->StdErr->OutputString(st->StdErr, newline);
+      st->StdErr->OutputString(st->StdErr, newline_char16);
       return s;
     }
 
@@ -411,7 +248,7 @@ EFI_STATUS efi_main(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st)
 
     // {
     //   char sig[5];
-    //   byte_to_hex2((xsdt->header.Length - sizeof(ACPISDTHeader)) / sizeof(ACPISDTHeader), &sig[0]);
+    //   byte_to_hex((xsdt->header.Length - sizeof(ACPISDTHeader)) / sizeof(ACPISDTHeader), &sig[0]);
     //   sig[2] = '\r';
     //   sig[3] = '\n';
     //   sig[4] = 0;
@@ -588,6 +425,6 @@ EFI_STATUS efi_main(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st)
       write_serial_cstr("Done Halting\r\n");
     }
 
-    runtime_services->ResetSystem(EfiResetShutdown, EFI_SUCCESS, 0, 0);
+    st->RuntimeServices->ResetSystem(EfiResetShutdown, EFI_SUCCESS, 0, 0);
     return(EFI_SUCCESS);
 }

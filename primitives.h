@@ -1,7 +1,7 @@
-// Header file for the assembly primitives.
-
 #ifndef PRIMITIVES_H_
 #define PRIMITIVES_H_
+
+// Header file for the assembly primitives.
 
 #include <stdint.h>
 
