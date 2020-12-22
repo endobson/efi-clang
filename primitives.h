@@ -1,5 +1,10 @@
 // Header file for the assembly primitives.
 
+#ifndef PRIMITIVES_H_
+#define PRIMITIVES_H_
+
+#include <stdint.h>
+
 //// Ports
 
 // Read a byte from the specified port
@@ -44,3 +49,5 @@ void halt();
 
 // Panic. Enters inifinite halt loop.
 void panic();
+
+#endif // PRIMITIVES_H_

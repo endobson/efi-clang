@@ -7,17 +7,20 @@ lflags = -subsystem:efi_application -nodefaultlib -dll -timestamp:12345
 
 all : hello-c.efi
 
-hello-c.efi : hello-c.obj primitives.obj
+hello-c.efi : hello-c.obj primitives.obj serial.obj
 	$(ld) $(lflags) -entry:efi_main $^ -out:$@
 
 hello-fasm.obj : hello-fasm.asm
 	nasm -f win64 $^ -o hello-fasm.obj
 
-hello-c.obj : hello-c.c primitives.h
+hello-c.obj : hello-c.c primitives.h serial.h
 	$(cc) $(cflags) -c $< -o $@
 
-primitives.obj : primitives.asm
-	nasm -f win64 $^ -o primitives.obj
+primitives.obj : primitives.asm primitives.h
+	nasm -f win64 $< -o $@
+
+serial.obj : serial.c serial.h
+	$(cc) $(cflags) -c $< -o $@
 	
 
 .PHONY : clean
