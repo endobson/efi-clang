@@ -8,22 +8,26 @@ lflags = -subsystem:efi_application -nodefaultlib -dll -timestamp:12345
 all : hello-c.efi memmap.efi hello-fasm.efi
 
 hello-fasm.efi : hello-fasm.obj
-	$(ld) $(lflags) -entry:efi_main $< -out:$@
+	$(ld) $(lflags) -entry:efi_main $^ -out:$@
 
-hello-c.efi : hello-c.obj
-	$(ld) $(lflags) -entry:efi_main $< -out:$@
+hello-c.efi : hello-c.obj util.obj
+	$(ld) $(lflags) -entry:efi_main $^ -out:$@
 
 memmap.efi : memmap.obj
-	$(ld) $(lflags) -entry:efi_main $< -out:$@
+	$(ld) $(lflags) -entry:efi_main $^ -out:$@
 
 hello-fasm.obj : hello-fasm.asm
-	nasm -f win64 $< -o hello-fasm.obj
+	nasm -f win64 $^ -o hello-fasm.obj
 
 hello-c.obj : hello-c.c
-	$(cc) $(cflags) -c $< -o $@
+	$(cc) $(cflags) -c $^ -o $@
 
 memmap.obj : memmap.c
-	$(cc) $(cflags) -c $< -o $@
+	$(cc) $(cflags) -c $^ -o $@
+
+util.obj : util.asm
+	nasm -f win64 $^ -o util.obj
+	
 
 .PHONY : clean
 clean:
