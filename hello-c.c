@@ -1,11 +1,9 @@
 
 #include "efi.h"
+#include "primitives.h"
 
 #define SERIAL_COM1_BASE                0x3F8      /* COM1 base port */
 
-uint8_t inb(uint16_t port);
-void outb(uint8_t v, uint16_t port);
-void halt();
 
 int is_transmit_empty() {
    return inb(SERIAL_COM1_BASE + 5) & 0x20;
@@ -121,7 +119,6 @@ void guid_to_hex(EFI_GUID guid, CHAR16* chars) {
   byte_to_hex(guid.Data4[7], &chars[33]);
   chars[35] = 0;
 }
-
 
 CHAR16* hello_str = L"Hello, you slab of warm meat!\r\n";
 CHAR16* newline = L"\r\n";
@@ -255,11 +252,6 @@ typedef struct IDTEntry {
   uint32_t zero;     // reserved
 } __attribute__ ((packed)) IDTEntry;
 
-typedef struct IDTDescr {
-  uint16_t limit;
-  uint64_t base_addr;
-} __attribute__ ((packed)) IDTDescr;
-
 IDTEntry idt_entries[256];
 IDTDescr idt_descr;
 
@@ -278,21 +270,8 @@ typedef struct GDTEntry {
   uint8_t base_3; // base addr bits 24..31
 } __attribute__ ((packed)) GDTEntry;
 
-typedef struct GDTDescr {
-  uint16_t limit;
-  uint64_t base_addr;
-} __attribute__ ((packed)) GDTDescr;
-
 GDTEntry gdt_entries[3];
 GDTDescr gdt_descr;
-
-extern void store_gdt(GDTDescr* gdt);
-extern void load_gdt(GDTDescr* gdt);
-// extern void load_segments(GDTEntry* code, GDTEntry* data);
-extern void load_segments(uint16_t code, uint16_t data);
-
-extern void load_idt(IDTDescr* idt);
-extern void irqfun();
 
 
 // Static array to make printing debug messages easier
@@ -539,26 +518,26 @@ EFI_STATUS efi_main(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st)
     //   write_serial(input);
     // }
 
-    GDTDescr uefi_gdt_descr;
-    store_gdt(&uefi_gdt_descr);
-    {
-      writer = buffer;
-      writer_add_cstr(&writer, "GDT Descriptor Limit: 0x");
-      writer_add_hex16(&writer, uefi_gdt_descr.limit);
-      writer_add_newline(&writer);
-      writer_add_cstr(&writer, "GDT Descriptor Base: 0x");
-      writer_add_hex64(&writer, uefi_gdt_descr.base_addr);
-      writer_add_newline(&writer);
-      writer_add_cstr(&writer, "GDT Bytes");
-      writer_add_newline(&writer);
-      for (int i = 0; i < 18; i++) {
-        writer_add_hex32(&writer, ((uint32_t*) uefi_gdt_descr.base_addr)[i]);
-        writer_add_newline(&writer);
-      }
+    // GDTDescr uefi_gdt_descr;
+    // store_gdt(&uefi_gdt_descr);
+    // {
+    //   writer = buffer;
+    //   writer_add_cstr(&writer, "GDT Descriptor Limit: 0x");
+    //   writer_add_hex16(&writer, uefi_gdt_descr.limit);
+    //   writer_add_newline(&writer);
+    //   writer_add_cstr(&writer, "GDT Descriptor Base: 0x");
+    //   writer_add_hex64(&writer, uefi_gdt_descr.base_addr);
+    //   writer_add_newline(&writer);
+    //   writer_add_cstr(&writer, "GDT Bytes");
+    //   writer_add_newline(&writer);
+    //   for (int i = 0; i < 18; i++) {
+    //     writer_add_hex32(&writer, ((uint32_t*) uefi_gdt_descr.base_addr)[i]);
+    //     writer_add_newline(&writer);
+    //   }
 
-      writer_terminate(&writer);
-      write_serial_cstr(buffer);
-    }
+    //   writer_terminate(&writer);
+    //   write_serial_cstr(buffer);
+    // }
 
 
     my_memset((uint8_t*) &gdt_entries, 0, sizeof(GDTEntry) * 3);
