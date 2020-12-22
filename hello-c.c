@@ -1,92 +1,10 @@
+#include "acpi.h"
+#include "descriptor_tables.h"
 #include "efi.h"
 #include "efi_util.h"
 #include "primitives.h"
 #include "serial.h"
 #include "strings.h"
-
-
-// ACPI structs
-
-// Root System Description Pointer 2.0
-
-typedef struct RSDPDescriptor {
- char Signature[8];
- uint8_t Checksum;
- char OEMID[6];
- uint8_t Revision;
- uint32_t RsdtAddress;
- uint32_t Length;
- uint64_t XsdtAddress;
- uint8_t ExtendedChecksum;
- uint8_t reserved[3];
-} __attribute__ ((packed)) RSDPDescriptor;
-
-typedef struct ACPISDTHeader {
-  char Signature[4];
-  uint32_t Length;
-  uint8_t Revision;
-  uint8_t Checksum;
-  char OEMID[6];
-  char OEMTableID[8];
-  uint32_t OEMRevision;
-  uint32_t CreatorID;
-  uint32_t CreatorRevision;
-} __attribute__ ((packed)) ACPISDTHeader;
-
-typedef struct XSDT {
-  ACPISDTHeader header;
-  uint64_t other_tables[];
-} __attribute__ ((packed)) XSDT;
-
-typedef struct ConfigSpaceAllocation {
-  uint64_t base_address;
-  uint16_t group_number;
-  uint8_t start_bus_number;
-  uint8_t end_bus_number;
-  uint32_t reserved;
-} __attribute__ ((packed)) ConfigSpaceAllocation;
-
-
-typedef struct MCFG {
-  ACPISDTHeader header;
-  uint64_t reserved;
-  ConfigSpaceAllocation allocations[];
-} __attribute__ ((packed)) MCFG;
-
-typedef struct IDTEntry {
-  uint16_t offset_1; // offset bits 0..15
-  uint16_t selector; // a code segment selector in GDT or LDT
-  uint8_t ist;       // bits 0..2 holds Interrupt Stack Table offset, rest of bits zero.
-  uint8_t type_attr; // type and attributes
-  uint16_t offset_2; // offset bits 16..31
-  uint32_t offset_3; // offset bits 32..63
-  uint32_t zero;     // reserved
-} __attribute__ ((packed)) IDTEntry;
-
-IDTEntry idt_entries[256];
-IDTDescr idt_descr;
-
-void my_memset(uint8_t* ptr, uint8_t v, int amt) {
-  for (int i = 0; i < amt; i++) {
-    ptr[i] = v;
-  }
-}
-
-typedef struct GDTEntry {
-  uint16_t limit_1; // limit bits 0..15
-  uint16_t base_1;  // base addr bits 0..15
-  uint8_t base_2;  // base addr bits 16..23
-  uint8_t flags1; // In BigEndian: P(1) - DPL(2) - S(1) - Type (4)
-  uint8_t flags2; // In BigEndian: G(1) - D/B(1) - L(1) - AVL(1) - Limit(4)[19..16]
-  uint8_t base_3; // base addr bits 24..31
-} __attribute__ ((packed)) GDTEntry;
-
-GDTEntry gdt_entries[3];
-GDTDescr gdt_descr;
-
-
-// Static array to make printing debug messages easier
-char buffer_array[4096];
 
 EFI_STATUS efi_main(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st)
 {
@@ -175,39 +93,38 @@ EFI_STATUS efi_main(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st)
       return s;
     }
 
-    char* buffer = (char*) buffer_array;
     char* writer;
 
     RSDPDescriptor* rsdp = acpi_table;
     {
-      writer = buffer;
+      writer = writer_buffer;
       writer_add_cstr(&writer, "RSDP signature: ");
       writer_add_bytes(&writer, rsdp->Signature, 8);
       writer_add_newline(&writer);
       writer_terminate(&writer);
-      write_serial_cstr(buffer);
+      write_serial_cstr(writer_buffer);
     }
 
     XSDT* xsdt = (XSDT*) rsdp->XsdtAddress;
     {
-      writer = buffer;
+      writer = writer_buffer;
       writer_add_cstr(&writer, "XSDT signature: ");
       writer_add_bytes(&writer, xsdt->header.Signature, 4);
       writer_add_newline(&writer);
       writer_terminate(&writer);
-      write_serial_cstr(buffer);
+      write_serial_cstr(writer_buffer);
     }
 
     {
       int num_tables = (xsdt->header.Length - sizeof(ACPISDTHeader)) / sizeof(int64_t);
 	  for (int i = 0; i < num_tables; i++) {
-        writer = buffer;
+        writer = writer_buffer;
         ACPISDTHeader* sdt = (ACPISDTHeader*) xsdt->other_tables[i];
         writer_add_cstr(&writer, "Table signature: ");
         writer_add_bytes(&writer, sdt->Signature, 4);
         writer_add_newline(&writer);
         writer_terminate(&writer);
-        write_serial_cstr(buffer);
+        write_serial_cstr(writer_buffer);
       }
     }
 
@@ -216,7 +133,7 @@ EFI_STATUS efi_main(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st)
 
     MCFG* mcfg = (MCFG*) xsdt->other_tables[3];
     {
-      writer = buffer;
+      writer = writer_buffer;
       writer_add_cstr(&writer, "MCFG signature: ");
       writer_add_bytes(&writer, mcfg->header.Signature, 4);
       writer_add_newline(&writer);
@@ -224,12 +141,12 @@ EFI_STATUS efi_main(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st)
       writer_add_hex32(&writer, mcfg->header.Length);
       writer_add_newline(&writer);
       writer_terminate(&writer);
-      write_serial_cstr(buffer);
+      write_serial_cstr(writer_buffer);
     }
 
     ConfigSpaceAllocation* alloc = &mcfg->allocations[0];
     {
-      writer = buffer;
+      writer = writer_buffer;
       writer_add_cstr(&writer, "Allocation BaseAddress: ");
       writer_add_hex64(&writer, alloc->base_address);
       writer_add_newline(&writer);
@@ -243,7 +160,7 @@ EFI_STATUS efi_main(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st)
       writer_add_hex8(&writer, alloc->end_bus_number);
       writer_add_newline(&writer);
       writer_terminate(&writer);
-      write_serial_cstr(buffer);
+      write_serial_cstr(writer_buffer);
     }
 
     // {
@@ -259,7 +176,7 @@ EFI_STATUS efi_main(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st)
     //
     {
       for (int device_num = 0; device_num < 4; device_num++) {
-        writer = buffer;
+        writer = writer_buffer;
         uint32_t* ptr = (uint32_t*) (alloc->base_address + (device_num << 15));
         writer_add_cstr(&writer, "Device: 0x");
         writer_add_hex8(&writer, device_num);
@@ -284,7 +201,7 @@ EFI_STATUS efi_main(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st)
         writer_add_hex32(&writer, ptr[7]);
         writer_add_newline(&writer);
         writer_terminate(&writer);
-        write_serial_cstr(buffer);
+        write_serial_cstr(writer_buffer);
       }
     }
 
@@ -318,7 +235,7 @@ EFI_STATUS efi_main(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st)
     // GDTDescr uefi_gdt_descr;
     // store_gdt(&uefi_gdt_descr);
     // {
-    //   writer = buffer;
+    //   writer = writer_buffer;
     //   writer_add_cstr(&writer, "GDT Descriptor Limit: 0x");
     //   writer_add_hex16(&writer, uefi_gdt_descr.limit);
     //   writer_add_newline(&writer);
@@ -333,7 +250,7 @@ EFI_STATUS efi_main(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st)
     //   }
 
     //   writer_terminate(&writer);
-    //   write_serial_cstr(buffer);
+    //   write_serial_cstr(writer_buffer);
     // }
 
 
@@ -369,7 +286,7 @@ EFI_STATUS efi_main(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st)
     // load_gdt(&gdt_descr);
 
     {
-      writer = buffer;
+      writer = writer_buffer;
       writer_add_cstr(&writer, "My GDT Descriptor Limit: 0x");
       writer_add_hex16(&writer, gdt_descr.limit);
       writer_add_newline(&writer);
@@ -384,7 +301,7 @@ EFI_STATUS efi_main(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st)
       }
 
       writer_terminate(&writer);
-      write_serial_cstr(buffer);
+      write_serial_cstr(writer_buffer);
     }
 
     // load_segments(0x08, 0x10);
@@ -402,12 +319,11 @@ EFI_STATUS efi_main(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st)
     }
 
 
-
     idt_descr.limit = sizeof(IDTEntry) * 256 - 1;
     idt_descr.base_addr = (uint64_t) &idt_entries;
     load_idt(&idt_descr);
     //{
-    //  writer = buffer;
+    //  writer = writer_buffer;
     //  writer_add_cstr(&writer, "IDT Base Address: 0x");
     //  writer_add_hex64(&writer, (uint64_t) &idt_entries);
     //  writer_add_newline(&writer);
@@ -415,7 +331,7 @@ EFI_STATUS efi_main(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st)
     //  writer_add_hex64(&writer, (uint64_t) &idt_descr);
     //  writer_add_newline(&writer);
     //  writer_terminate(&writer);
-    //  write_serial_cstr(buffer);
+    //  write_serial_cstr(writer_buffer);
     //}
 
 

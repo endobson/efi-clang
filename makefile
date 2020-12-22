@@ -7,10 +7,11 @@ lflags = -subsystem:efi_application -nodefaultlib -dll -timestamp:12345
 
 all : hello-c.efi
 
-hello-c.efi : hello-c.obj primitives.obj serial.obj strings.obj efi_util.obj
+hello-c.efi : hello-c.obj primitives.obj serial.obj strings.obj efi_util.obj \
+              descriptor_tables.obj
 	$(ld) $(lflags) -entry:efi_main $^ -out:$@
 
-hello-c.obj : hello-c.c primitives.h serial.h strings.h efi_util.h
+hello-c.obj : hello-c.c primitives.h serial.h strings.h efi_util.h acpi.h
 	$(cc) $(cflags) -c $< -o $@
 
 primitives.obj : primitives.asm primitives.h
@@ -23,6 +24,9 @@ strings.obj : strings.c strings.h
 	$(cc) $(cflags) -c $< -o $@
 
 efi_util.obj : efi_util.c efi_util.h strings.h
+	$(cc) $(cflags) -c $< -o $@
+
+descriptor_tables.obj : descriptor_tables.c descriptor_tables.h primitives.h
 	$(cc) $(cflags) -c $< -o $@
 	
 
