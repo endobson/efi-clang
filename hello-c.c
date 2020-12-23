@@ -236,6 +236,61 @@ void initialize_gdt() {
   // load_segments(0x08, 0x10);
 }
 
+void init_pic() {
+  // Base port numbers for the Master/Slave PICs.
+  uint8_t pic1 = 0x20;
+  uint8_t pic2 = 0x80;
+  // Command and data port numbers
+  uint8_t pic1_command = pic1 + 0;
+  uint8_t pic1_data = pic1 + 1;
+  uint8_t pic2_command = pic2 + 0;
+  uint8_t pic2_data = pic2 + 1;
+
+  uint8_t icw1_init = 0x10; // This is an initialization command
+  uint8_t icw1_icw4 = 0x01; // This initialization uses command word 4
+  // Start the initialization sequence (in cascade mode)
+  outb(icw1_init | icw1_icw4, pic1_command);
+  outb(icw1_init | icw1_icw4, pic2_command);
+
+  // Set the PICs to use the entries in the IDT range [32, 47).
+  uint8_t offset1 = 32;
+  uint8_t offset2 = 40;
+  outb(offset1, pic1_data);    // ICW2: Master PIC vector offset
+  outb(offset2, pic2_data);    // ICW2: Slave PIC vector offset
+  outb(0b00000100, pic1_data); // ICW3: tell Master PIC that there is a slave PIC at IRQ2
+  outb(2, pic2_data);          // ICW3: tell Slave PIC its cascade identity
+
+  // Set 8086 mode
+  uint8_t icw4_8086 = 0x01;
+  outb(icw4_8086, pic1_data);
+  outb(icw4_8086, pic2_data);
+
+  // Only enable some interrupts.
+  // PIC 1, bit 4: COM1 serial port
+  uint8_t pic1_interrupts = (1 << 4);
+  uint8_t pic2_interrupts = 0;
+  // Mask all interrupts that shouldn't be enabled.
+  outb(~pic1_interrupts, pic1_data);
+  outb(~pic2_interrupts, pic2_data);
+}
+
+void init_idt() {
+  my_memset((uint8_t*) &idt_entries, 0, sizeof(IDTEntry) * 256);
+  uint64_t irq_addr = (uint64_t) irqfun;
+  for (int i = 0; i < 256; i++) {
+    idt_entries[i].offset_1 = irq_addr & 0xffff;
+    idt_entries[i].selector = 0x38;
+    idt_entries[i].ist = 0;
+    idt_entries[i].type_attr = 0x8e;
+    idt_entries[i].offset_2 = (irq_addr >> 16) & 0xffff;
+    idt_entries[i].offset_3 = irq_addr >> 32;
+    idt_entries[i].zero = 0;
+  }
+
+  idt_descr.limit = sizeof(IDTEntry) * 256 - 1;
+  idt_descr.base_addr = (uint64_t) &idt_entries;
+  load_idt(&idt_descr);
+}
 
 EFI_STATUS efi_main(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st)
 {
@@ -252,38 +307,36 @@ EFI_STATUS efi_main(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st)
       return s;
     }
     // UEFI is now finished.
+    // Start initializing sub systems.
 
     // check_acpi_tables(rsdp);
 
     // TODO Actually set up the GDT
     // initialize_gdt();
 
+    init_idt();
+    init_serial();
+    init_pic();
 
+    enable_interrupts();
+
+    // Run the main OS loop
     char* writer;
 
-    my_memset((uint8_t*) &idt_entries, 0, sizeof(IDTEntry) * 256);
-    uint64_t irq_addr = (uint64_t) irqfun;
-    for (int i = 0; i < 256; i++) {
-      idt_entries[i].offset_1 = irq_addr & 0xffff;
-      idt_entries[i].selector = 0x38;
-      idt_entries[i].ist = 0;
-      idt_entries[i].type_attr = 0x8e;
-      idt_entries[i].offset_2 = (irq_addr >> 16) & 0xffff;
-      idt_entries[i].offset_3 = irq_addr >> 32;
-      idt_entries[i].zero = 0;
+    write_serial_cstr("\033c");
+    write_serial_cstr("Welcome to YAOS.\r\n");
+    int loop_count = 0;
+    while (1) {
+      {
+        writer = writer_buffer;
+        writer_add_hex8(&writer, read_serial());
+        writer_add_newline(&writer);
+        writer_terminate(&writer);
+        write_serial_cstr(writer_buffer);
+      }
     }
 
-    idt_descr.limit = sizeof(IDTEntry) * 256 - 1;
-    idt_descr.base_addr = (uint64_t) &idt_entries;
-    load_idt(&idt_descr);
-
-
-    for (int i = 0; i < 3; i++) {
-      write_serial_cstr("Halting\r\n");
-      halt();
-      write_serial_cstr("Done Halting\r\n");
-    }
-
+    // Shutdown
     st->RuntimeServices->ResetSystem(EfiResetShutdown, EFI_SUCCESS, 0, 0);
     return(EFI_SUCCESS);
 }

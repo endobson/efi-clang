@@ -23,20 +23,33 @@ int serial_received() {
    return inb(SERIAL_COM1_BASE + 5) & 1;
 }
 
+// This assumes that interrupts are enabled when it is called.
 char read_serial() {
-   while (serial_received() == 0);
+   while (1) {
+     disable_interrupts();
+     if (serial_received() != 0) break;
+     enable_interrupts_and_halt();
+   }
+   enable_interrupts();
 
    return inb(SERIAL_COM1_BASE);
 }
 
-/* Unused serial initialization.
-void init_serial(unsigned short port) {
-   outb(port + 1, 0x00);    // Disable all interrupts
-   outb(port + 3, 0x80);    // Enable DLAB (set baud rate divisor)
-   outb(port + 0, 0x03);    // Set divisor to 3 (lo byte) 38400 baud
-   outb(port + 1, 0x00);    //                  (hi byte)
-   outb(port + 3, 0x03);    // 8 bits, no parity, one stop bit
-   outb(port + 2, 0xC7);    // Enable FIFO, clear them, with 14-byte threshold
-   outb(port + 4, 0x0B);    // IRQs enabled, RTS/DSR set
+void init_serial() {
+   uint16_t port = SERIAL_COM1_BASE;
+   // Disable all interrupts on the port while setup happens
+   outb(0x00, port + 1);
+   // Enable the DLAB. This changes the meaning of ports 0/1 which allows
+   // setting the baud rate divisor.
+   outb(0x80, port + 3);
+   // Set divisor to 3 (low byte) 38400 baud
+   outb(0x03, port + 0);
+   outb(0x00, port + 1);
+
+   // Clear the DLAB, and set the protcol as:
+   // 8 bits, no parity, one stop bit
+   outb(0x03, port + 3);
+   // Don't set FIFOs as they don't seem to do anything in QEMU.
+   // Enable IRQs on Receive.
+   outb(0x01, port + 1);
 }
-*/

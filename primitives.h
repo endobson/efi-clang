@@ -47,6 +47,15 @@ void irqfun();
 // Halt until an interrupt.
 void halt();
 
+// Enable interrupts and halt until one.
+void enable_interrupts_and_halt();
+
+// disable interrupts.
+void disable_interrupts();
+
+// Enable interrupts.
+void enable_interrupts();
+
 // Panic. Enters inifinite halt loop.
 void panic();
 

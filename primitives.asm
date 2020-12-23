@@ -2,7 +2,7 @@
 ;
 
 section '.text' code executable readable
-;;;;;;;; 
+;;;;;;;;
 ; Input from Port
 global inb
 inb:
@@ -11,7 +11,7 @@ inb:
   ret
 
 ; Output to Port
-global outb 
+global outb
 outb:
   mov al, cl ; Move the data to be sent into the al register
              ; The address of the I/O port is already in the dx register
@@ -25,8 +25,18 @@ load_idt:
   lidt [ecx]
   ret
 
+
+; extern irqhandler
 global irqfun
 irqfun:
+  push rax
+  push rdx
+  mov dx, 0x20
+  mov al, 0x20
+  out dx, al
+
+  pop rdx
+  pop rax
   iretq
 
 ;; Untested Global Descriptor Table code
@@ -34,12 +44,12 @@ irqfun:
 ; store_gdt:
 ;   sgdt [ecx]
 ;   ret
-; 
+;
 ; global load_gdt
 ; load_gdt:
 ;   lgdt [ecx]
 ;   ret
-; 
+;
 ; global load_segments
 ; load_segments:
 ;   mov ss, dx
@@ -48,10 +58,28 @@ irqfun:
 
 ;;;;;;;;
 ; Halt until an interrupt
-
-global halt 
+global halt
 halt:
   hlt
+  ret
+
+; Enable interrupts and wait for one.
+global enable_interrupts_and_halt
+enable_interrupts_and_halt:
+  sti
+  hlt
+  ret
+
+; Disable interrupts
+global disable_interrupts
+disable_interrupts:
+  cli
+  ret
+
+; Enable interrupts
+global enable_interrupts
+enable_interrupts:
+  sti
   ret
 
 ; Panic, and stop forever
