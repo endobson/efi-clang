@@ -35,6 +35,13 @@ char read_serial() {
    return inb(SERIAL_COM1_BASE);
 }
 
+void drain_serial() {
+  while (serial_received()) {
+    inb(SERIAL_COM1_BASE);
+  }
+}
+
+
 void init_serial() {
    uint16_t port = SERIAL_COM1_BASE;
    // Disable all interrupts on the port while setup happens

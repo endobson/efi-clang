@@ -10,12 +10,39 @@ inb:
   in al, dx  ; Must use these registers for this instruction
   ret
 
+global inw
+inw:
+  mov dx, cx ; Move the port to the dx register
+  in ax, dx  ; Must use these registers for this instruction
+  ret
+
+global inl
+inl:
+  mov dx, cx ; Move the port to the dx register
+  in eax, dx  ; Must use these registers for this instruction
+  ret
+
+
 ; Output to Port
 global outb
 outb:
   mov al, cl ; Move the data to be sent into the al register
              ; The address of the I/O port is already in the dx register
   out dx, al ; Must use these registers for this instruction
+  ret
+
+global outw
+outw:
+  mov ax, cx ; Move the data to be sent into the ax register
+             ; The address of the I/O port is already in the dx register
+  out dx, ax ; Must use these registers for this instruction
+  ret
+
+global outl
+outl:
+  mov eax, ecx ; Move the data to be sent into the eax register
+               ; The address of the I/O port is already in the dx register
+  out dx, eax  ; Must use these registers for this instruction
   ret
 
 ;;;;;;;;
@@ -39,6 +66,27 @@ irqfun_com1:
   mov dx, 0x20
   ; EOI (End of Interrupt) command
   mov al, 0x20
+  ; Send command
+  out dx, al
+
+  pop rdx
+  pop rax
+  iretq
+
+global irqfun_nic
+irqfun_nic:
+  push rax
+  push rdx
+  ; Port for PIC 1
+  mov dx, 0x20
+  ; EOI (End of Interrupt) command
+  mov al, 0x20
+  ; Send command
+  out dx, al
+
+  ; Port for PIC 2
+  mov dx, 0xa0
+  ; Send command (Still EOI)
   out dx, al
 
   pop rdx

@@ -9,9 +9,17 @@
 
 // Read a byte from the specified port
 uint8_t inb(uint16_t port);
+// Read 2 bytes from the specified port
+uint16_t inw(uint16_t port);
+// Read 4 bytes from the specified port
+uint32_t inl(uint16_t port);
 
 // Write a byte to the specified port
 void outb(uint8_t v, uint16_t port);
+// Write 2 bytes to the specified port
+void outw(uint16_t v, uint16_t port);
+// Write 4 bytes to the specified port
+void outl(uint32_t v, uint16_t port);
 
 //// Segments
 
@@ -48,6 +56,9 @@ void irqfun_default();
 
 // IRQ function for COM1.
 void irqfun_com1();
+
+// IRQ function for .
+void irqfun_nic();
 
 // Halt until an interrupt.
 void halt();

@@ -10,6 +10,8 @@ void write_serial_cstr(char* str);
 // Read a single character from the serial port.
 char read_serial();
 
+void drain_serial();
+
 // Configures the serial port.
 void init_serial();
 

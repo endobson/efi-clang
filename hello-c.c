@@ -239,7 +239,7 @@ void initialize_gdt() {
 void init_pic() {
   // Base port numbers for the Master/Slave PICs.
   uint8_t pic1 = 0x20;
-  uint8_t pic2 = 0x80;
+  uint8_t pic2 = 0xA0;
   // Command and data port numbers
   uint8_t pic1_command = pic1 + 0;
   uint8_t pic1_data = pic1 + 1;
@@ -266,9 +266,11 @@ void init_pic() {
   outb(icw4_8086, pic2_data);
 
   // Only enable some interrupts.
+  // PIC 1, bit 2: Allow PIC2 through
   // PIC 1, bit 4: COM1 serial port
-  uint8_t pic1_interrupts = (1 << 4);
-  uint8_t pic2_interrupts = 0;
+  uint8_t pic1_interrupts = (1 << 2) | (1 << 4);
+  // PIC 2, bit 3: NIC
+  uint8_t pic2_interrupts = (1 << 3);
   // Mask all interrupts that shouldn't be enabled.
   outb(~pic1_interrupts, pic1_data);
   outb(~pic2_interrupts, pic2_data);
@@ -280,6 +282,8 @@ void init_idt() {
     uint64_t irq_addr;
     if (i == 36) {
       irq_addr = (uint64_t) irqfun_com1;
+    } else if (i == 43) {
+      irq_addr = (uint64_t) irqfun_nic;
     } else {
       irq_addr = (uint64_t) irqfun_default;
     }
@@ -297,6 +301,335 @@ void init_idt() {
   idt_descr.base_addr = (uint64_t) &idt_entries;
   load_idt(&idt_descr);
 }
+
+typedef struct PCIHeader0 {
+  uint16_t vendor_id;
+  uint16_t device_id;
+  uint16_t command;
+  uint16_t status;
+  uint8_t revison;
+  uint8_t prog_if;
+  uint8_t subclass;
+  uint8_t class;
+  uint8_t cache_line_size;
+  uint8_t latency_timer;
+  uint8_t header_type;
+  uint8_t bist;
+  uint32_t base_address[6];
+  uint32_t cis_pointer;
+  uint16_t subsystem_vendor_id;
+  uint16_t subsystem_id;
+  uint32_t expansion_rom_base_address;
+  uint8_t capabilities_pointer;
+  uint8_t reserved[7];
+  uint8_t interrupt_line;
+  uint8_t interrupt_pin;
+  uint8_t min_grant;
+  uint8_t max_latency;
+} __attribute__ ((packed)) PCIHeader0;
+
+void print_device(PCIHeader0* header) {
+  char* writer;
+  writer = writer_buffer;
+  writer_add_cstr(&writer, "Vendor ID: 0x");
+  writer_add_hex16(&writer, header->vendor_id);
+  writer_add_newline(&writer);
+  writer_add_cstr(&writer, "Device ID: 0x");
+  writer_add_hex16(&writer, header->device_id);
+  writer_add_newline(&writer);
+  writer_add_cstr(&writer, "Command: 0x");
+  writer_add_hex16(&writer, header->command);
+  writer_add_newline(&writer);
+  writer_add_cstr(&writer, "Status: 0x");
+  writer_add_hex16(&writer, header->status);
+  writer_add_newline(&writer);
+  writer_add_cstr(&writer, "Class: 0x");
+  writer_add_hex8(&writer, header->class);
+  writer_add_newline(&writer);
+  writer_add_cstr(&writer, "Subclass: 0x");
+  writer_add_hex8(&writer, header->subclass);
+  writer_add_newline(&writer);
+  writer_add_cstr(&writer, "Header Type: 0x");
+  writer_add_hex8(&writer, header->header_type);
+  writer_add_newline(&writer);
+  writer_add_cstr(&writer, "Subsystem Vendor: 0x");
+  writer_add_hex16(&writer, header->subsystem_vendor_id);
+  writer_add_newline(&writer);
+  writer_add_cstr(&writer, "Subsystem ID: 0x");
+  writer_add_hex16(&writer, header->subsystem_id);
+  writer_add_newline(&writer);
+  for (int i = 0; i < 6; i++) {
+    uint32_t bar = header->base_address[i];
+    if (bar != 0) {
+      writer_add_cstr(&writer, "Base Address ");
+      writer_add_hex8(&writer, i);
+      writer_add_cstr(&writer, ": ");
+      if (bar & 1) {
+        writer_add_cstr(&writer, "I/0 @ ");
+        writer_add_hex32(&writer, bar & 0xFFFFFFFC);
+      } else if ((bar & 6) == 4)  {
+        uint32_t bar2 = header->base_address[++i];
+        uint64_t combined_bar = ((uint64_t) bar2 << 32) | (bar & 0xFFFFFFF0);
+        writer_add_cstr(&writer, "64 bit Memory @ ");
+        writer_add_hex64(&writer, combined_bar);
+      } else {
+        writer_add_cstr(&writer, "32 bit Memory @ ");
+        writer_add_hex32(&writer, bar & 0xFFFFFFF0);
+      }
+
+      writer_add_newline(&writer);
+    }
+  }
+  writer_add_cstr(&writer, "Interrupt Line: 0x");
+  writer_add_hex8(&writer, header->interrupt_line);
+  writer_add_newline(&writer);
+  writer_add_cstr(&writer, "Interrupt Pin: 0x");
+  writer_add_hex8(&writer, header->interrupt_pin);
+  writer_add_newline(&writer);
+
+  writer_terminate(&writer);
+  write_serial_cstr(writer_buffer);
+}
+
+typedef struct VirtioQueue256 {
+  struct {
+    uint64_t address;
+    uint32_t length;
+    uint16_t flags;
+    uint16_t next;
+  } buffers[256];
+
+  struct {
+    uint16_t flags;
+    uint16_t index;
+    uint16_t ring[256];
+    uint16_t event_index;
+  } available;
+
+  struct {
+    uint16_t flags;
+    uint16_t index;
+    struct {
+      uint32_t index;
+      uint32_t length;
+    } ring[256];
+    uint16_t avail_event;
+  } used __attribute__ ((aligned(4096)));
+} __attribute__ ((packed, aligned(4096))) VirtioQueue256;
+
+VirtioQueue256 net_send_queue;
+VirtioQueue256 net_recv_queue;
+
+typedef struct VirtioBuffer {
+  uint8_t buf[4096];
+} __attribute__ ((packed, aligned(4096))) VirtioBuffer;
+
+VirtioBuffer net_send_buffers[256];
+VirtioBuffer net_recv_buffers[256];
+  
+
+void init_network() {
+  uint64_t base_address = 0x00000000b0000000;
+  int device_num = 2;
+
+  PCIHeader0* header = (PCIHeader0*) (base_address + (device_num << 15));
+  PCIHeader0* header2 = (PCIHeader0*) (base_address + (1 << 15));
+
+  // print_device(header);
+  // print_device(header2);
+
+  int feature_mac = 5;
+  uint16_t device_features_port = 0x00;
+  uint16_t guest_features_port  = 0x04;
+  uint16_t queue_address_port   = 0x08;
+  uint16_t queue_size_port      = 0x0c;
+  uint16_t queue_select_port    = 0x0e;
+  uint16_t device_status_port   = 0x12;
+
+  uint8_t device_acknowledged = 0x01;
+  uint8_t device_driver       = 0x02;
+  uint8_t device_features_ok  = 0x08;
+  uint8_t device_driver_ok    = 0x04;
+
+  uint16_t net_base_port = 0x6060;
+
+
+  // Acknowledge the device.
+  outb(device_acknowledged,
+       net_base_port + device_status_port);
+  // Tell the device that we know how to drive it.
+  outb(device_acknowledged | device_driver, 
+       net_base_port + device_status_port);
+
+  uint32_t device_features = inl(net_base_port + device_features_port);
+  if (!(device_features & (1 << feature_mac))) {
+    panic();
+  }
+
+  uint32_t guest_features = (1 << feature_mac);
+  outl(guest_features, net_base_port + guest_features_port);
+
+  // Tell the device that we are finalized on our feature decisions.
+  outb(device_acknowledged | device_driver | device_features_ok, 
+       net_base_port + device_status_port);
+
+  int8_t device_status = inb(net_base_port + device_status_port);
+  if (device_status != (device_acknowledged | device_driver | device_features_ok)) {
+    panic();
+  }
+
+  char* writer;
+  for (uint16_t queue_num = 0; queue_num < 2; queue_num ++) {
+    outw(queue_num, net_base_port + queue_select_port);
+    uint16_t queue_size = inw(net_base_port + queue_size_port);
+    if (queue_size != 0x100) {
+      panic();
+    }
+
+    {
+      writer = writer_buffer;
+      writer_add_cstr(&writer, "Queue 0x");
+      writer_add_hex16(&writer, queue_num);
+      writer_add_cstr(&writer, ": ");
+      writer_add_hex16(&writer, queue_size);
+      writer_add_newline(&writer);
+
+      writer_terminate(&writer);
+      write_serial_cstr(writer_buffer);
+    }
+  }
+  
+  my_memset((uint8_t*) &net_send_queue, 0, sizeof(net_send_queue));
+  my_memset((uint8_t*) &net_recv_queue, 0, sizeof(net_recv_queue));
+
+  for (int i = 0; i < 256; i++) {
+    net_recv_queue.buffers[i].address = (uint64_t) &net_recv_buffers[i];
+    net_recv_queue.buffers[i].length  = 4096;
+    net_recv_queue.buffers[i].flags   = 2; // Device writable
+    net_recv_queue.buffers[i].next    = 0;
+
+    net_recv_queue.available.ring[i] = i;
+  }
+  net_recv_queue.available.index = 256;
+
+
+  // Tell the device about our queues
+  outw(0, net_base_port + queue_select_port);
+
+  outl(((uint64_t) &net_recv_queue) >> 12, 
+       net_base_port + queue_address_port);
+  outw(1, net_base_port + queue_select_port);
+  outl(((uint64_t) &net_send_queue) >> 12, 
+       net_base_port + queue_address_port);
+
+  // Tell the device that we are ready!
+  outb(device_acknowledged | device_driver | device_features_ok | device_driver_ok, 
+       net_base_port + device_status_port);
+  device_status = inb(net_base_port + device_status_port);
+  if (device_status != (device_acknowledged | device_driver | device_features_ok | device_driver_ok)) {
+    panic();
+  }
+
+
+  if (0) {
+    writer = writer_buffer;
+    writer_add_cstr(&writer, "Send Queue Addr: ");
+    writer_add_hex64(&writer, (uint64_t) &net_send_queue);
+    writer_add_newline(&writer);
+    writer_add_cstr(&writer, "Send Queue used Addr: ");
+    writer_add_hex64(&writer, (uint64_t) &net_send_queue.used);
+    writer_add_newline(&writer);
+
+    writer_terminate(&writer);
+    write_serial_cstr(writer_buffer);
+  }
+
+  {
+    writer = writer_buffer;
+    writer_add_cstr(&writer, "Devices Features: ");
+    writer_add_hex32(&writer, device_features);
+    writer_add_newline(&writer);
+    writer_add_cstr(&writer, "Guest Features: ");
+    writer_add_hex32(&writer, inl(net_base_port + guest_features_port));
+    writer_add_newline(&writer);
+    writer_add_cstr(&writer, "Device Status: ");
+    writer_add_hex8(&writer, device_status);
+    writer_add_newline(&writer);
+
+    writer_terminate(&writer);
+    write_serial_cstr(writer_buffer);
+  }
+  
+}
+
+void print_network_status() {
+  char* writer;
+
+  uint16_t device_status_port   = 0x12;
+  uint16_t isr_status_port   = 0x13;
+
+  uint16_t net_base_port = 0x6060;
+
+
+
+  uint8_t device_status = inb(net_base_port + device_status_port);
+  uint8_t isr_status = inb(net_base_port + isr_status_port);
+
+  {
+    writer = writer_buffer;
+    writer_add_cstr(&writer, "Device Status: 0x");
+    writer_add_hex16(&writer, device_status);
+    writer_add_newline(&writer);
+    writer_add_cstr(&writer, "ISR Status: 0x");
+    writer_add_hex16(&writer, isr_status);
+    writer_add_newline(&writer);
+    writer_add_cstr(&writer, "Network Recv flags: 0x");
+    writer_add_hex16(&writer, net_recv_queue.used.flags);
+    writer_add_newline(&writer);
+    writer_add_cstr(&writer, "Network Recv used: 0x");
+    writer_add_hex16(&writer, net_recv_queue.used.index);
+    writer_add_newline(&writer);
+
+    writer_terminate(&writer);
+    write_serial_cstr(writer_buffer);
+  }
+
+  {
+    writer = writer_buffer;
+    writer_add_cstr(&writer, "Network Buffer:");
+    writer_add_newline(&writer);
+
+    uint32_t ring_index = net_recv_queue.used.index - 1;
+    uint32_t buffer_num = net_recv_queue.used.ring[ring_index].index;
+    writer_add_cstr(&writer, "Network Recv Buffer Num: 0x");
+    writer_add_hex32(&writer, buffer_num);
+    writer_add_newline(&writer);
+    uint32_t buffer_length = net_recv_queue.used.ring[ring_index].length;
+    writer_add_cstr(&writer, "Network Recv Buffer length: 0x");
+    writer_add_hex32(&writer, buffer_length);
+    writer_add_newline(&writer);
+    writer_add_cstr(&writer, "Network Recv Buffer Addr: 0x");
+    writer_add_hex32(&writer, net_recv_queue.buffers[buffer_num].address);
+    writer_add_newline(&writer);
+
+    uint8_t* buffer = (uint8_t*) &net_recv_buffers[buffer_num].buf;
+
+    for (int i = 0; i < 64; i++) {
+      writer_add_hex8(&writer, buffer[i]);
+      if (i % 8 == 7) {
+        writer_add_newline(&writer);
+      }
+    }
+    
+
+
+    writer_terminate(&writer);
+    write_serial_cstr(writer_buffer);
+  }
+
+}
+
+
 
 EFI_STATUS efi_main(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st)
 {
@@ -323,17 +656,23 @@ EFI_STATUS efi_main(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st)
     init_idt();
     init_serial();
     init_pic();
+    init_network();
 
     enable_interrupts();
 
     // Run the main OS loop
-    char* writer;
 
     write_serial_cstr("\033c");
     write_serial_cstr("Welcome to YAOS.\r\n");
-    int loop_count = 0;
-    while (1) {
-      {
+    if (1) {
+      while (1) {
+        print_network_status();
+        halt();
+        drain_serial();
+      }
+    } else {
+      while (1) {
+        char* writer;
         writer = writer_buffer;
         writer_add_hex8(&writer, read_serial());
         writer_add_newline(&writer);
