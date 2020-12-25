@@ -27,11 +27,17 @@ load_idt:
 
 
 ; extern irqhandler
-global irqfun
-irqfun:
+global irqfun_default
+irqfun_default:
+  jmp panic
+
+global irqfun_com1
+irqfun_com1:
   push rax
   push rdx
+  ; Port for PIC 1
   mov dx, 0x20
+  ; EOI (End of Interrupt) command
   mov al, 0x20
   out dx, al
 
@@ -85,5 +91,6 @@ enable_interrupts:
 ; Panic, and stop forever
 global panic
 panic:
+  mov rax, 0xDEADDEAD
   hlt
   jmp panic

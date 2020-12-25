@@ -40,9 +40,14 @@ typedef struct IDTDescr {
 void load_idt(IDTDescr* idt);
 
 
-// Assembly routine that handles interrupts.
-// Does not follow standard calling convention.
-void irqfun();
+// Assembly routines that handle interrupts.
+// Do not follow standard calling convention.
+
+// Default IRQ function. Panics the machine.
+void irqfun_default();
+
+// IRQ function for COM1.
+void irqfun_com1();
 
 // Halt until an interrupt.
 void halt();

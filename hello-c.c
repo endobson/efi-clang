@@ -276,8 +276,14 @@ void init_pic() {
 
 void init_idt() {
   my_memset((uint8_t*) &idt_entries, 0, sizeof(IDTEntry) * 256);
-  uint64_t irq_addr = (uint64_t) irqfun;
   for (int i = 0; i < 256; i++) {
+    uint64_t irq_addr;
+    if (i == 36) {
+      irq_addr = (uint64_t) irqfun_com1;
+    } else {
+      irq_addr = (uint64_t) irqfun_default;
+    }
+
     idt_entries[i].offset_1 = irq_addr & 0xffff;
     idt_entries[i].selector = 0x38;
     idt_entries[i].ist = 0;
