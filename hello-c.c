@@ -4,6 +4,7 @@
 #include "efi_util.h"
 #include "primitives.h"
 #include "serial.h"
+#include "scheduler.h"
 #include "strings.h"
 
 RSDPDescriptor* find_rsdp(EFI_SYSTEM_TABLE* st) {
@@ -627,64 +628,11 @@ void print_network_status() {
 
 }
 
-
-typedef enum TaskState {
-  TaskState_Runnable,
-  TaskState_Blocked,
-} TaskState;
-
-typedef struct TaskDescriptor {
-  void* stack_pointer;
-  struct TaskDescriptor* next;
-  TaskState state;
-} __attribute__ ((packed)) TaskDescriptor;
-
-
-
-TaskDescriptor* current_task = 0;
-TaskDescriptor* all_tasks = 0;
-
-TaskDescriptor root_task;
-
 uint8_t serial_stack[8192];
 TaskDescriptor serial_task;
 
 uint8_t serial_stack2[8192];
 TaskDescriptor serial_task2;
-
-
-int yield(TaskState new_old_state) {
-  TaskDescriptor* old_task = current_task;
-  TaskDescriptor* new_task = old_task->next;
-
-  while (new_task != old_task) {
-    if (new_task->state == TaskState_Runnable) break;
-    new_task = new_task->next;
-  }
-
-  int ret_val = 0;
-  if (new_task != old_task) {
-    ret_val = 1;
-    old_task->state = new_old_state;
-    current_task = new_task;
-    switch_to_task(old_task, new_task);
-  }
-
-  return ret_val;
-}
-
-
-void mark_all_runnable() {
-  disable_interrupts();
-  TaskDescriptor* task = current_task;
-  do {
-    task->state = TaskState_Runnable;
-    task = task->next;
-  } while (task != current_task);
-
-  enable_interrupts();
-}
-
 
 
 void serial_task_start() {
@@ -750,52 +698,10 @@ void serial_task2_start() {
 }
 
 
-
-void init_scheduler() {
-  // Initialize root_task
-  root_task.stack_pointer = 0;
-  root_task.next = &root_task;
-  root_task.state = TaskState_Runnable;
-
-  // Initialize the current task as the root_task;
-  current_task = &root_task;
-
-  {
-    serial_task.stack_pointer = &serial_stack[8192];
-    serial_task.next = current_task->next;
-    current_task->next = &serial_task;
-
-    uint64_t* u64_sp = (uint64_t*) serial_task.stack_pointer;
-
-    *(--u64_sp) = (uint64_t) serial_task_start;
-    for (int i = 0; i < 15; i++) {
-      *(--u64_sp) = 0;
-    }
-
-    serial_task.stack_pointer = u64_sp;
-  }
-
-  {
-    serial_task2.stack_pointer = &serial_stack2[8192];
-    serial_task2.next = current_task->next;
-    current_task->next = &serial_task2;
-
-    uint64_t* u64_sp = (uint64_t*) serial_task2.stack_pointer;
-
-    *(--u64_sp) = (uint64_t) serial_task2_start;
-    for (int i = 0; i < 15; i++) {
-      *(--u64_sp) = 0;
-    }
-
-    serial_task2.stack_pointer = u64_sp;
-  }
-
-
-
+void add_initial_tasks() {
+  add_task(&serial_task, &serial_stack[8192], serial_task_start);
+  add_task(&serial_task2, &serial_stack2[8192], serial_task2_start);
 }
-
-
-
 
 
 EFI_STATUS efi_main(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st)
@@ -826,17 +732,15 @@ EFI_STATUS efi_main(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st)
     init_network();
     init_scheduler();
 
+    add_initial_tasks();
+
     enable_interrupts();
 
-    // Run the main OS loop
-
+    // Print hello message.
     write_serial_cstr("\033c");
     write_serial_cstr("Welcome to Yaspl OS.\r\n");
-    while (1) {
-      disable_interrupts();
-      while (yield(TaskState_Runnable)) {}
-      enable_interrupts_and_halt();
-    }
+    // Run the main OS loop
+    run_scheduler_loop();
 
     // Shutdown
     st->RuntimeServices->ResetSystem(EfiResetShutdown, EFI_SUCCESS, 0, 0);
