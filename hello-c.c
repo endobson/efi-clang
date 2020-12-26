@@ -426,7 +426,6 @@ typedef struct VirtioBuffer {
 
 VirtioBuffer net_send_buffers[256];
 VirtioBuffer net_recv_buffers[256];
-  
 
 void init_network() {
   uint64_t base_address = 0x00000000b0000000;
@@ -458,7 +457,7 @@ void init_network() {
   outb(device_acknowledged,
        net_base_port + device_status_port);
   // Tell the device that we know how to drive it.
-  outb(device_acknowledged | device_driver, 
+  outb(device_acknowledged | device_driver,
        net_base_port + device_status_port);
 
   uint32_t device_features = inl(net_base_port + device_features_port);
@@ -470,7 +469,7 @@ void init_network() {
   outl(guest_features, net_base_port + guest_features_port);
 
   // Tell the device that we are finalized on our feature decisions.
-  outb(device_acknowledged | device_driver | device_features_ok, 
+  outb(device_acknowledged | device_driver | device_features_ok,
        net_base_port + device_status_port);
 
   int8_t device_status = inb(net_base_port + device_status_port);
@@ -498,7 +497,7 @@ void init_network() {
       write_serial_cstr(writer_buffer);
     }
   }
-  
+
   my_memset((uint8_t*) &net_send_queue, 0, sizeof(net_send_queue));
   my_memset((uint8_t*) &net_recv_queue, 0, sizeof(net_recv_queue));
 
@@ -516,14 +515,14 @@ void init_network() {
   // Tell the device about our queues
   outw(0, net_base_port + queue_select_port);
 
-  outl(((uint64_t) &net_recv_queue) >> 12, 
+  outl(((uint64_t) &net_recv_queue) >> 12,
        net_base_port + queue_address_port);
   outw(1, net_base_port + queue_select_port);
-  outl(((uint64_t) &net_send_queue) >> 12, 
+  outl(((uint64_t) &net_send_queue) >> 12,
        net_base_port + queue_address_port);
 
   // Tell the device that we are ready!
-  outb(device_acknowledged | device_driver | device_features_ok | device_driver_ok, 
+  outb(device_acknowledged | device_driver | device_features_ok | device_driver_ok,
        net_base_port + device_status_port);
   device_status = inb(net_base_port + device_status_port);
   if (device_status != (device_acknowledged | device_driver | device_features_ok | device_driver_ok)) {
@@ -559,8 +558,9 @@ void init_network() {
     writer_terminate(&writer);
     write_serial_cstr(writer_buffer);
   }
-  
+
 }
+
 
 void print_network_status() {
   char* writer;
@@ -620,14 +620,181 @@ void print_network_status() {
         writer_add_newline(&writer);
       }
     }
-    
-
 
     writer_terminate(&writer);
     write_serial_cstr(writer_buffer);
   }
 
 }
+
+
+typedef enum TaskState {
+  TaskState_Runnable,
+  TaskState_Blocked,
+} TaskState;
+
+typedef struct TaskDescriptor {
+  void* stack_pointer;
+  struct TaskDescriptor* next;
+  TaskState state;
+} __attribute__ ((packed)) TaskDescriptor;
+
+
+
+TaskDescriptor* current_task = 0;
+TaskDescriptor* all_tasks = 0;
+
+TaskDescriptor root_task;
+
+uint8_t serial_stack[8192];
+TaskDescriptor serial_task;
+
+uint8_t serial_stack2[8192];
+TaskDescriptor serial_task2;
+
+
+int yield(TaskState new_old_state) {
+  TaskDescriptor* old_task = current_task;
+  TaskDescriptor* new_task = old_task->next;
+
+  while (new_task != old_task) {
+    if (new_task->state == TaskState_Runnable) break;
+    new_task = new_task->next;
+  }
+
+  int ret_val = 0;
+  if (new_task != old_task) {
+    ret_val = 1;
+    old_task->state = new_old_state;
+    current_task = new_task;
+    switch_to_task(old_task, new_task);
+  }
+
+  return ret_val;
+}
+
+
+void mark_all_runnable() {
+  disable_interrupts();
+  TaskDescriptor* task = current_task;
+  do {
+    task->state = TaskState_Runnable;
+    task = task->next;
+  } while (task != current_task);
+
+  enable_interrupts();
+}
+
+
+
+void serial_task_start() {
+  enable_interrupts();
+
+  while (1) {
+    char c = read_serial();
+    char* writer = writer_buffer;
+    writer_add_cstr(&writer, "Console: ");
+    writer_add_hex8(&writer, c);
+    writer_add_newline(&writer);
+    writer_terminate(&writer);
+    write_serial_cstr(writer_buffer);
+  }
+}
+
+void wait_network_interrupt() {
+  char* writer;
+
+  uint16_t device_status_port   = 0x12;
+  uint16_t isr_status_port   = 0x13;
+
+  uint16_t net_base_port = 0x6060;
+
+  uint8_t isr_status;
+  disable_interrupts();
+  do {
+    isr_status = inb(net_base_port + isr_status_port);
+    if (isr_status != 0) break;
+    yield(TaskState_Blocked);
+  } while (1);
+  enable_interrupts();
+
+  uint8_t device_status = inb(net_base_port + device_status_port);
+
+  {
+    writer = writer_buffer;
+    writer_add_cstr(&writer, "Device Status: 0x");
+    writer_add_hex16(&writer, device_status);
+    writer_add_newline(&writer);
+    writer_add_cstr(&writer, "ISR Status: 0x");
+    writer_add_hex16(&writer, isr_status);
+    writer_add_newline(&writer);
+    writer_add_cstr(&writer, "Network Recv flags: 0x");
+    writer_add_hex16(&writer, net_recv_queue.used.flags);
+    writer_add_newline(&writer);
+    writer_add_cstr(&writer, "Network Recv used: 0x");
+    writer_add_hex16(&writer, net_recv_queue.used.index);
+    writer_add_newline(&writer);
+
+    writer_terminate(&writer);
+    write_serial_cstr(writer_buffer);
+  }
+
+}
+
+void serial_task2_start() {
+  enable_interrupts();
+
+  while (1) {
+    wait_network_interrupt();
+  }
+}
+
+
+
+void init_scheduler() {
+  // Initialize root_task
+  root_task.stack_pointer = 0;
+  root_task.next = &root_task;
+  root_task.state = TaskState_Runnable;
+
+  // Initialize the current task as the root_task;
+  current_task = &root_task;
+
+  {
+    serial_task.stack_pointer = &serial_stack[8192];
+    serial_task.next = current_task->next;
+    current_task->next = &serial_task;
+
+    uint64_t* u64_sp = (uint64_t*) serial_task.stack_pointer;
+
+    *(--u64_sp) = (uint64_t) serial_task_start;
+    for (int i = 0; i < 15; i++) {
+      *(--u64_sp) = 0;
+    }
+
+    serial_task.stack_pointer = u64_sp;
+  }
+
+  {
+    serial_task2.stack_pointer = &serial_stack2[8192];
+    serial_task2.next = current_task->next;
+    current_task->next = &serial_task2;
+
+    uint64_t* u64_sp = (uint64_t*) serial_task2.stack_pointer;
+
+    *(--u64_sp) = (uint64_t) serial_task2_start;
+    for (int i = 0; i < 15; i++) {
+      *(--u64_sp) = 0;
+    }
+
+    serial_task2.stack_pointer = u64_sp;
+  }
+
+
+
+}
+
+
 
 
 
@@ -657,28 +824,18 @@ EFI_STATUS efi_main(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st)
     init_serial();
     init_pic();
     init_network();
+    init_scheduler();
 
     enable_interrupts();
 
     // Run the main OS loop
 
     write_serial_cstr("\033c");
-    write_serial_cstr("Welcome to YAOS.\r\n");
-    if (1) {
-      while (1) {
-        print_network_status();
-        halt();
-        drain_serial();
-      }
-    } else {
-      while (1) {
-        char* writer;
-        writer = writer_buffer;
-        writer_add_hex8(&writer, read_serial());
-        writer_add_newline(&writer);
-        writer_terminate(&writer);
-        write_serial_cstr(writer_buffer);
-      }
+    write_serial_cstr("Welcome to Yaspl OS.\r\n");
+    while (1) {
+      disable_interrupts();
+      while (yield(TaskState_Runnable)) {}
+      enable_interrupts_and_halt();
     }
 
     // Shutdown

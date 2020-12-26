@@ -23,14 +23,23 @@ int serial_received() {
    return inb(SERIAL_COM1_BASE + 5) & 1;
 }
 
+typedef enum TaskState {
+  TaskState_Runnable,
+  TaskState_Blocked,
+} TaskState;
+
+extern int yield(TaskState state);
+
 // This assumes that interrupts are enabled when it is called.
 char read_serial() {
-   while (1) {
+   if (serial_received() == 0) {
      disable_interrupts();
-     if (serial_received() != 0) break;
-     enable_interrupts_and_halt();
+     while (1) {
+       if (serial_received() != 0) break;
+       yield(TaskState_Blocked);
+     }
+     enable_interrupts();
    }
-   enable_interrupts();
 
    return inb(SERIAL_COM1_BASE);
 }

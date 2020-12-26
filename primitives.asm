@@ -52,6 +52,7 @@ load_idt:
   lidt [ecx]
   ret
 
+extern mark_all_runnable
 
 ; extern irqhandler
 global irqfun_default
@@ -60,8 +61,33 @@ irqfun_default:
 
 global irqfun_com1
 irqfun_com1:
+  pushf
   push rax
   push rdx
+  cld
+
+  ; Disable other interrupts
+  sti
+  push rax
+  push rcx
+  push rdx
+  push r8
+  push r9
+  push r10
+  push r11
+
+  call mark_all_runnable
+
+  pop r11
+  pop r10
+  pop r9
+  pop r8
+  pop rdx
+  pop rcx
+  pop rax
+  ; Reenable interrupts
+  cli
+
   ; Port for PIC 1
   mov dx, 0x20
   ; EOI (End of Interrupt) command
@@ -71,12 +97,38 @@ irqfun_com1:
 
   pop rdx
   pop rax
+  popf
   iretq
 
 global irqfun_nic
 irqfun_nic:
+  pushf
   push rax
   push rdx
+  cld
+
+  ; Disable other interrupts
+  sti
+  push rax
+  push rcx
+  push rdx
+  push r8
+  push r9
+  push r10
+  push r11
+
+  call mark_all_runnable
+
+  pop r11
+  pop r10
+  pop r9
+  pop r8
+  pop rdx
+  pop rcx
+  pop rax
+  ; Reenable interrupts
+  cli
+
   ; Port for PIC 1
   mov dx, 0x20
   ; EOI (End of Interrupt) command
@@ -91,7 +143,10 @@ irqfun_nic:
 
   pop rdx
   pop rax
+  popf
   iretq
+
+
 
 ;; Untested Global Descriptor Table code
 ; global store_gdt
@@ -142,3 +197,42 @@ panic:
   mov rax, 0xDEADDEAD
   hlt
   jmp panic
+
+
+global switch_to_task
+switch_to_task:
+  push rax
+  push rbx
+  push rcx
+  push rdx
+  push rbp
+  push rsi
+  push rdi
+  push r8
+  push r9
+  push r10
+  push r11
+  push r12
+  push r13
+  push r14
+  push r15
+
+  mov [rcx], rsp
+  mov rsp, [rdx]
+
+  pop r15
+  pop r14
+  pop r13
+  pop r12
+  pop r11
+  pop r10
+  pop r9
+  pop r8
+  pop rdi
+  pop rsi
+  pop rbp
+  pop rdx
+  pop rcx
+  pop rbx
+  pop rax
+  ret

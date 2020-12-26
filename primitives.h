@@ -75,4 +75,7 @@ void enable_interrupts();
 // Panic. Enters inifinite halt loop.
 void panic();
 
+// Switches to the specified task.
+void switch_to_task(void* current_task, void* next_task);
+
 #endif // PRIMITIVES_H_
