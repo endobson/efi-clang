@@ -28,16 +28,28 @@ int yield(TaskState new_old_state) {
   return ret_val;
 }
 
+void scheduler_start_task(void (*func)()) {
+  enable_interrupts();
+
+  func();
+}
+
 void add_task(TaskDescriptor* task, void* stack, void* func) {
 
   // Push initial values onto the stack.
   uint64_t* u64_sp = (uint64_t*) stack;
 
   // First return address
-  *(--u64_sp) = (uint64_t) func;
+  *(--u64_sp) = (uint64_t) scheduler_start_task;
   // Zero for all initial registers.
   for (int i = 0; i < 15; i++) {
-    *(--u64_sp) = 0;
+    uint64_t val;
+    if (i == 2) { // rcx
+      val = (uint64_t) func;
+    } else {
+      val = 0;
+    }
+    *(--u64_sp) = val;
   }
 
   task->stack_pointer = u64_sp;
@@ -72,7 +84,6 @@ void init_scheduler() {
 }
 
 void run_scheduler_loop() {
-
   while (1) {
     disable_interrupts();
     while (yield(TaskState_Runnable)) {}

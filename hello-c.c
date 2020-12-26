@@ -628,16 +628,14 @@ void print_network_status() {
 
 }
 
-uint8_t serial_stack[8192];
+uint8_t serial_task_stack[8192];
 TaskDescriptor serial_task;
 
-uint8_t serial_stack2[8192];
-TaskDescriptor serial_task2;
+uint8_t network_task_stack[8192];
+TaskDescriptor network_task;
 
 
 void serial_task_start() {
-  enable_interrupts();
-
   while (1) {
     char c = read_serial();
     char* writer = writer_buffer;
@@ -689,9 +687,7 @@ void wait_network_interrupt() {
 
 }
 
-void serial_task2_start() {
-  enable_interrupts();
-
+void network_task_start() {
   while (1) {
     wait_network_interrupt();
   }
@@ -699,8 +695,8 @@ void serial_task2_start() {
 
 
 void add_initial_tasks() {
-  add_task(&serial_task, &serial_stack[8192], serial_task_start);
-  add_task(&serial_task2, &serial_stack2[8192], serial_task2_start);
+  add_task(&serial_task, &serial_task_stack[8192], serial_task_start);
+  add_task(&network_task, &network_task_stack[8192], network_task_start);
 }
 
 
