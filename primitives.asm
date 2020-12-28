@@ -192,8 +192,10 @@ enable_interrupts:
   ret
 
 ; Panic, and stop forever
+; Disables interupts
 global panic
 panic:
+  cli
   mov rax, 0xDEADDEAD
   hlt
   jmp panic

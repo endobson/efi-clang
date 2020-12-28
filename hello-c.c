@@ -502,22 +502,12 @@ void init_network() {
   my_memset((uint8_t*) &net_send_queue, 0, sizeof(net_send_queue));
   my_memset((uint8_t*) &net_recv_queue, 0, sizeof(net_recv_queue));
 
-  for (int i = 0; i < 256; i++) {
-    net_recv_queue.buffers[i].address = (uint64_t) &net_recv_buffers[i];
-    net_recv_queue.buffers[i].length  = 4096;
-    net_recv_queue.buffers[i].flags   = 2; // Device writable
-    net_recv_queue.buffers[i].next    = 0;
-
-    net_recv_queue.available.ring[i] = i;
-  }
-  net_recv_queue.available.index = 256;
-
 
   // Tell the device about our queues
   outw(0, net_base_port + queue_select_port);
-
   outl(((uint64_t) &net_recv_queue) >> 12,
        net_base_port + queue_address_port);
+
   outw(1, net_base_port + queue_select_port);
   outl(((uint64_t) &net_send_queue) >> 12,
        net_base_port + queue_address_port);
@@ -647,47 +637,236 @@ void serial_task_start() {
   }
 }
 
+void writer_add_hex_buffer(char** writer, uint8_t* buf, int length) {
+  int i;
+  for (i = 0; i < length; i++) {
+    writer_add_hex8(writer, buf[i]);
+    if (i % 8 == 7) {
+      writer_add_newline(writer);
+    }
+  }
+  if (i % 8 != 0) {
+    writer_add_newline(writer);
+  }
+}
+
+typedef struct BigEndianU16 {
+  uint8_t byte0;
+  uint8_t byte1;
+} __attribute__ ((packed)) BigEndianU16;
+
+typedef struct VirtioNetHeader {
+  uint8_t header[10];
+  uint8_t data[];
+} __attribute__ ((packed)) VirtioNetHeader;
+
+typedef struct EthernetHeader {
+  uint8_t destination_mac[6];
+  uint8_t source_mac[6];
+  BigEndianU16 ethertype;
+  uint8_t data[];
+} __attribute__ ((packed)) EthernetHeader;
+
+// This struct assumes that the sizing is consistent with IPv4/Ethernet
+// ARP packets.
+typedef struct ArpPacket {
+  BigEndianU16 hardware_type;
+  BigEndianU16 protocol_type;
+  uint8_t hardware_length;
+  uint8_t protocol_length;
+  BigEndianU16 operation_type;
+  uint8_t sender_hardware_address[6];
+  uint8_t sender_protocol_address[4];
+  uint8_t target_hardware_address[6];
+  uint8_t target_protocol_address[4];
+} __attribute__ ((packed)) ArpPacket;
+
+uint16_t be_u16_to_le(BigEndianU16 be) {
+  return be.byte0 << 8 | be.byte1 << 0;
+}
+
+
+void send_arp_packet() {
+  write_serial_cstr("Sending Arp Packet\r\n");
+
+  uint16_t net_base_port = 0x6060;
+  uint16_t isr_status_port   = 0x13;
+  uint16_t queue_notify_port    = 0x10;
+
+  int index = net_send_queue.available.index;
+  {
+    int i = index % 256;
+
+
+
+    VirtioNetHeader* virtio_header = (VirtioNetHeader*) &net_send_buffers[i];
+    for (int j = 0; j < 10; j++) {
+      virtio_header->header[i] = 0;
+    }
+
+    EthernetHeader* ethernet_header = (EthernetHeader*) &virtio_header->data;
+    ethernet_header->destination_mac[0] = 0x52;
+    ethernet_header->destination_mac[1] = 0x55;
+    ethernet_header->destination_mac[2] = 0x0a;
+    ethernet_header->destination_mac[3] = 0x00;
+    ethernet_header->destination_mac[4] = 0x02;
+    ethernet_header->destination_mac[5] = 0x02;
+    ethernet_header->source_mac[0] = 0x52;
+    ethernet_header->source_mac[1] = 0x54;
+    ethernet_header->source_mac[2] = 0x00;
+    ethernet_header->source_mac[3] = 0x12;
+    ethernet_header->source_mac[4] = 0x34;
+    ethernet_header->source_mac[5] = 0x56;
+    ethernet_header->ethertype.byte0 = 0x08;
+    ethernet_header->ethertype.byte1 = 0x06;
+
+    ArpPacket* arp_packet = (ArpPacket*) &ethernet_header->data;
+    arp_packet->hardware_type.byte0 = 0x00;
+    arp_packet->hardware_type.byte1 = 0x01;
+    arp_packet->protocol_type.byte0 = 0x08;
+    arp_packet->protocol_type.byte1 = 0x00;
+    arp_packet->hardware_length = 6;
+    arp_packet->protocol_length = 4;
+    arp_packet->operation_type.byte0 = 0x00;
+    arp_packet->operation_type.byte1 = 0x02;
+    arp_packet->sender_hardware_address[0] = 0x52;
+    arp_packet->sender_hardware_address[1] = 0x54;
+    arp_packet->sender_hardware_address[2] = 0x00;
+    arp_packet->sender_hardware_address[3] = 0x12;
+    arp_packet->sender_hardware_address[4] = 0x34;
+    arp_packet->sender_hardware_address[5] = 0x56;
+
+    arp_packet->sender_protocol_address[0] = 0x0a;
+    arp_packet->sender_protocol_address[1] = 0x00;
+    arp_packet->sender_protocol_address[2] = 0x02;
+    arp_packet->sender_protocol_address[3] = 0x0f;
+
+    arp_packet->target_hardware_address[0] = 0x52;
+    arp_packet->target_hardware_address[1] = 0x55;
+    arp_packet->target_hardware_address[2] = 0x0a;
+    arp_packet->target_hardware_address[3] = 0x00;
+    arp_packet->target_hardware_address[4] = 0x02;
+    arp_packet->target_hardware_address[5] = 0x02;
+    arp_packet->target_protocol_address[0] = 0x0a;
+    arp_packet->target_protocol_address[1] = 0x00;
+    arp_packet->target_protocol_address[2] = 0x02;
+    arp_packet->target_protocol_address[3] = 0x02;
+
+    net_send_queue.buffers[i].address = (uint64_t) &net_send_buffers[i];
+    net_send_queue.buffers[i].length  =
+      sizeof(ArpPacket) + sizeof(EthernetHeader) + sizeof(VirtioNetHeader);
+    net_send_queue.buffers[i].flags   = 0;
+    net_send_queue.buffers[i].next    = 0;
+
+    net_send_queue.available.ring[i] = i;
+    net_send_queue.available.index++;
+  }
+
+  // Tell the device that queue 1 (send) has a new buffer.
+  outw(1, net_base_port + queue_notify_port);
+
+  disable_interrupts();
+  do {
+    // Read the interrupt status register to clear the interrupt state.
+    inb(net_base_port + isr_status_port);
+    if (net_send_queue.used.index == index + 1) break;
+    yield(TaskState_Blocked);
+  } while (1);
+  enable_interrupts();
+
+}
+
+
 void wait_network_interrupt() {
   char* writer;
 
   uint16_t device_status_port   = 0x12;
   uint16_t isr_status_port   = 0x13;
+  uint16_t queue_notify_port    = 0x10;
 
   uint16_t net_base_port = 0x6060;
 
-  uint8_t isr_status;
+  int index = net_recv_queue.available.index;
+  {
+    int i = index % 256;
+
+    net_recv_queue.buffers[i].address = (uint64_t) &net_recv_buffers[i];
+    net_recv_queue.buffers[i].length  = 4096;
+    net_recv_queue.buffers[i].flags   = 2; // Device writable
+    net_recv_queue.buffers[i].next    = 0;
+
+    net_recv_queue.available.ring[i] = i;
+    net_recv_queue.available.index++;
+  }
+
+  // Tell the device that queue 0 (recv) has a new buffer.
+  outw(0, net_base_port + queue_notify_port);
+
   disable_interrupts();
   do {
-    isr_status = inb(net_base_port + isr_status_port);
-    if (isr_status != 0) break;
+    // Read the interrupt status register to clear the interrupt state.
+    inb(net_base_port + isr_status_port);
+    if (net_recv_queue.used.index == index + 1) break;
     yield(TaskState_Blocked);
   } while (1);
   enable_interrupts();
 
-  uint8_t device_status = inb(net_base_port + device_status_port);
 
   {
-    writer = writer_buffer;
-    writer_add_cstr(&writer, "Device Status: 0x");
-    writer_add_hex16(&writer, device_status);
-    writer_add_newline(&writer);
-    writer_add_cstr(&writer, "ISR Status: 0x");
-    writer_add_hex16(&writer, isr_status);
-    writer_add_newline(&writer);
-    writer_add_cstr(&writer, "Network Recv flags: 0x");
-    writer_add_hex16(&writer, net_recv_queue.used.flags);
-    writer_add_newline(&writer);
-    writer_add_cstr(&writer, "Network Recv used: 0x");
-    writer_add_hex16(&writer, net_recv_queue.used.index);
-    writer_add_newline(&writer);
+    int ring_i = index % 256;
+    int buffer_i = net_recv_queue.used.ring[ring_i].index;
+    if (buffer_i != ring_i) {
+      panic();
+    }
+    int remaining_packet_length = net_recv_queue.used.ring[ring_i].length;
+    void* raw_buffer = (void*) net_recv_queue.buffers[buffer_i].address;
 
-    writer_terminate(&writer);
-    write_serial_cstr(writer_buffer);
+    if (remaining_packet_length < sizeof(VirtioNetHeader)) {
+      panic();
+    }
+    VirtioNetHeader* virtio_header = (VirtioNetHeader*) raw_buffer;
+    remaining_packet_length -= sizeof(VirtioNetHeader);
+
+    if (remaining_packet_length < sizeof(EthernetHeader)) {
+      panic();
+    }
+    EthernetHeader* ethernet_header = (EthernetHeader*) &virtio_header->data;
+    remaining_packet_length -= sizeof(EthernetHeader);
+
+    if (ethernet_header->ethertype.byte0 == 0x08 &&
+        ethernet_header->ethertype.byte1 == 0x06) {
+      if (remaining_packet_length < sizeof(ArpPacket)) {
+        panic();
+      }
+      ArpPacket* arp_packet = (ArpPacket*) &ethernet_header->data;
+      remaining_packet_length -= sizeof(ArpPacket);
+
+      if (remaining_packet_length != 0) {
+        panic();
+      }
+
+      if (be_u16_to_le(arp_packet->hardware_type) != 1) {
+        panic();
+      }
+      if (be_u16_to_le(arp_packet->protocol_type) != 0x0800) {
+        panic();
+      }
+      if (arp_packet->hardware_length != 6) {
+        panic();
+      }
+      if (arp_packet->protocol_length != 4) {
+        panic();
+      }
+
+      send_arp_packet();
+    } else {
+      write_serial_cstr("Unknown packet type\r\n");
+    }
   }
-
 }
 
 void network_task_start() {
+  int num_network_packets;
   while (1) {
     wait_network_interrupt();
   }
