@@ -681,6 +681,31 @@ typedef struct ArpPacket {
   uint8_t target_protocol_address[4];
 } __attribute__ ((packed)) ArpPacket;
 
+
+typedef struct IpHeader {
+  uint8_t version_header_length;
+  uint8_t dcsp_ecn;
+  BigEndianU16 total_length;
+  BigEndianU16 identification;
+  BigEndianU16 flags_fragment_offset;
+  uint8_t time_to_live;
+  uint8_t protocol;
+  BigEndianU16 header_checksum;
+  uint8_t source_ip[4];
+  uint8_t destination_ip[4];
+  uint8_t data[];
+} __attribute__ ((packed)) IpHeader;
+
+typedef struct UdpHeader {
+  BigEndianU16 source_port;
+  BigEndianU16 destination_port;
+  BigEndianU16 length;
+  BigEndianU16 checksum;
+  uint8_t data[];
+} __attribute__ ((packed)) UdpHeader;
+
+
+
 uint16_t be_u16_to_le(BigEndianU16 be) {
   return be.byte0 << 8 | be.byte1 << 0;
 }
@@ -776,6 +801,106 @@ void send_arp_packet() {
 
 }
 
+void send_udp_packet(uint16_t dest_port) {
+  write_serial_cstr("Sending UDP Packet\r\n");
+
+  uint16_t net_base_port = 0x6060;
+  uint16_t isr_status_port   = 0x13;
+  uint16_t queue_notify_port    = 0x10;
+
+  int index = net_send_queue.available.index;
+  {
+    int i = index % 256;
+
+
+
+    VirtioNetHeader* virtio_header = (VirtioNetHeader*) &net_send_buffers[i];
+    for (int j = 0; j < 10; j++) {
+      virtio_header->header[i] = 0;
+    }
+
+    EthernetHeader* ethernet_header = (EthernetHeader*) &virtio_header->data;
+    ethernet_header->destination_mac[0] = 0x52;
+    ethernet_header->destination_mac[1] = 0x55;
+    ethernet_header->destination_mac[2] = 0x0a;
+    ethernet_header->destination_mac[3] = 0x00;
+    ethernet_header->destination_mac[4] = 0x02;
+    ethernet_header->destination_mac[5] = 0x02;
+    ethernet_header->source_mac[0] = 0x52;
+    ethernet_header->source_mac[1] = 0x54;
+    ethernet_header->source_mac[2] = 0x00;
+    ethernet_header->source_mac[3] = 0x12;
+    ethernet_header->source_mac[4] = 0x34;
+    ethernet_header->source_mac[5] = 0x56;
+    ethernet_header->ethertype.byte0 = 0x08;
+    ethernet_header->ethertype.byte1 = 0x00;
+
+    uint8_t response[] = "abcdefghijklmnop\n";
+    uint8_t response_length = 17;
+
+    IpHeader* ip_header = (IpHeader*) &ethernet_header->data;
+    ip_header->version_header_length = 0x45;
+    ip_header->dcsp_ecn = 0x00;
+    uint16_t total_length = sizeof(UdpHeader) + sizeof(IpHeader) + response_length;
+    ip_header->total_length.byte0 = total_length >> 8 & 0xff;
+    ip_header->total_length.byte1 = total_length >> 0 & 0xff;
+    ip_header->flags_fragment_offset.byte0 = 0;
+    ip_header->flags_fragment_offset.byte1 = 0;
+    ip_header->time_to_live = 64;
+    ip_header->protocol = 17; // UDP
+    ip_header->header_checksum.byte0 = 0x62;
+    ip_header->header_checksum.byte1 = 0xb0;
+    ip_header->source_ip[0] = 10;
+    ip_header->source_ip[1] = 0;
+    ip_header->source_ip[2] = 2;
+    ip_header->source_ip[3] = 15;
+    ip_header->destination_ip[0] = 10;
+    ip_header->destination_ip[1] = 0;
+    ip_header->destination_ip[2] = 2;
+    ip_header->destination_ip[3] = 2;
+
+
+    UdpHeader* udp_header = (UdpHeader*) &ip_header->data;
+    udp_header->source_port.byte0 = 0;
+    udp_header->source_port.byte1 = 7;
+    udp_header->destination_port.byte0 = dest_port >> 8 & 0xff;
+    udp_header->destination_port.byte1 = dest_port >> 0 & 0xff;
+    int udp_packet_length = sizeof(UdpHeader) + response_length;
+    udp_header->length.byte0 = udp_packet_length >> 8 & 0xff;
+    udp_header->length.byte1 = udp_packet_length >> 0 & 0xff;
+    udp_header->checksum.byte0 = 0;
+    udp_header->checksum.byte1 = 0;
+
+    for (int j = 0; j < response_length; j++) {
+      udp_header->data[j] = response[j];
+    }
+
+
+    net_send_queue.buffers[i].address = (uint64_t) &net_send_buffers[i];
+    net_send_queue.buffers[i].length  =
+      response_length + sizeof(UdpHeader) + sizeof(IpHeader) + sizeof(EthernetHeader) + sizeof(VirtioNetHeader);
+    net_send_queue.buffers[i].flags   = 0;
+    net_send_queue.buffers[i].next    = 0;
+
+    net_send_queue.available.ring[i] = i;
+    net_send_queue.available.index++;
+  }
+
+  // Tell the device that queue 1 (send) has a new buffer.
+  outw(1, net_base_port + queue_notify_port);
+
+  disable_interrupts();
+  do {
+    // Read the interrupt status register to clear the interrupt state.
+    inb(net_base_port + isr_status_port);
+    if (net_send_queue.used.index == index + 1) break;
+    yield(TaskState_Blocked);
+  } while (1);
+  enable_interrupts();
+
+}
+
+
 
 void wait_network_interrupt() {
   char* writer;
@@ -859,6 +984,36 @@ void wait_network_interrupt() {
       }
 
       send_arp_packet();
+    } else if (ethernet_header->ethertype.byte0 == 0x08 &&
+               ethernet_header->ethertype.byte1 == 0x00) {
+      write_serial_cstr("IPv4 packet\r\n");
+      if (remaining_packet_length < sizeof(IpHeader)) {
+        panic();
+      }
+      IpHeader* ip_header = (IpHeader*) &ethernet_header->data;
+
+      if (remaining_packet_length != be_u16_to_le(ip_header->total_length)) {
+        panic();
+      }
+
+      int header_length = ip_header->version_header_length & 0x0F;
+      if (header_length != 5) {
+        panic();
+      }
+      remaining_packet_length -= sizeof(IpHeader);
+
+      if (remaining_packet_length < sizeof(UdpHeader)) {
+        panic();
+      }
+      UdpHeader* udp_header = (UdpHeader*) &ip_header->data;
+
+      send_udp_packet(be_u16_to_le(udp_header->source_port));
+
+      if (remaining_packet_length != be_u16_to_le(udp_header->length)) {
+        panic();
+      }
+      remaining_packet_length -= sizeof(UdpHeader);
+
     } else {
       write_serial_cstr("Unknown packet type\r\n");
     }
