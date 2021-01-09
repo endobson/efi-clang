@@ -1,6 +1,6 @@
 
 cc = clang
-cflags = -I efi -target x86_64-pc-win32-coff -fno-stack-protector -fshort-wchar -mno-red-zone -Brepro \
+cflags = -target x86_64-pc-win32-coff -fno-stack-protector -fshort-wchar -mno-red-zone -Brepro \
          -fno-unwind-tables
 ld = lld-link
 lflags = -subsystem:efi_application -nodefaultlib -dll -timestamp:12345
@@ -8,7 +8,7 @@ lflags = -subsystem:efi_application -nodefaultlib -dll -timestamp:12345
 all : hello-c.efi
 
 hello-c.efi : hello-c.obj primitives.obj serial.obj strings.obj efi_util.obj \
-              descriptor_tables.obj scheduler.obj
+              descriptor_tables.obj scheduler.obj examples.obj
 	$(ld) $(lflags) -entry:efi_main $^ -out:$@
 
 hello-c.obj : hello-c.c primitives.h serial.h strings.h efi_util.h acpi.h scheduler.h

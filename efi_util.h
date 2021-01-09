@@ -3,10 +3,10 @@
 
 #include "efi.h"
 
-void guid_to_hex(EFI_GUID guid, CHAR16* chars);
+void guid_to_hex(EFI_GUID guid, uint16_t* chars);
 
 int guid_equal(EFI_GUID g1, EFI_GUID g2);
 
-extern CHAR16* newline_char16;
+extern uint16_t* newline_char16;
 
 #endif // EFI_UTIL_H_

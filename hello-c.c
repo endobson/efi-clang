@@ -7,16 +7,24 @@
 #include "scheduler.h"
 #include "strings.h"
 
-RSDPDescriptor* find_rsdp(EFI_SYSTEM_TABLE* st) {
-  for (int i = 0; i < st->NumberOfTableEntries; i++) {
-      EFI_CONFIGURATION_TABLE ct = st->ConfigurationTable[i];
-      EFI_GUID acpi_table_guid = EFI_ACPI_TABLE_GUID;
-      if (guid_equal(ct.VendorGuid, acpi_table_guid)) {
-        return (RSDPDescriptor*) ct.VendorTable;
-      }
-  }
-  return 0;
-}
+// RSDPDescriptor* find_rsdp(EFI_SYSTEM_TABLE* st) {
+//   for (int i = 0; i < st->NumberOfTableEntries; i++) {
+//       EFI_CONFIGURATION_TABLE ct = st->ConfigurationTable[i];
+//       EFI_GUID acpi_table_guid = EFI_ACPI_TABLE_GUID;
+//       if (guid_equal(ct.VendorGuid, acpi_table_guid)) {
+//         return (RSDPDescriptor*) ct.VendorTable;
+//       }
+//   }
+//   return 0;
+// }
+//
+
+typedef uint64_t UINTN;
+typedef uint32_t UINT32;
+
+#define EFI_SUCCESS                 0x0000000000000000
+#define EFI_ERR                     0x8000000000000000
+#define EFI_BUFFER_TOO_SMALL        (EFI_ERR | 0x0000000000000005)
 
 EFI_STATUS exit_boot_services(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st) {
   UINTN memory_map_size = 0;
@@ -1033,15 +1041,24 @@ void add_initial_tasks() {
   add_task(&network_task, &network_task_stack[8192], network_task_start);
 }
 
+uint8_t yos_a(uint8_t a);
 
 EFI_STATUS efi_main(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st)
 {
-    RSDPDescriptor* rsdp = find_rsdp(st);
+    //RSDPDescriptor* rsdp = find_rsdp(st);
 
-    if (rsdp == 0) {
-      st->StdErr->OutputString(st->StdErr, L"Unable to get RSDP acpi table");
+    //if (rsdp == 0) {
+    //  st->StdErr->OutputString(st->StdErr, L"Unable to get RSDP acpi table");
+    //  st->StdErr->OutputString(st->StdErr, newline_char16);
+    //  return EFI_NOT_FOUND;
+    //}
+    {
+      uint16_t buf[3];
+      st->StdErr->OutputString(st->StdErr, L"YASPL Value: ");
+      byte_to_hex_char16(yos_a(65), &buf[0]);
+      buf[2] = 0;
+      st->StdErr->OutputString(st->StdErr, buf);
       st->StdErr->OutputString(st->StdErr, newline_char16);
-      return EFI_NOT_FOUND;
     }
 
     EFI_STATUS s = exit_boot_services(ih, st);

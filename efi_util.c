@@ -1,7 +1,7 @@
 #include "efi_util.h"
 #include "strings.h"
 
-void guid_to_hex_char16(EFI_GUID guid, CHAR16* chars) {
+void guid_to_hex_char16(EFI_GUID guid, uint16_t* chars) {
   byte_to_hex_char16((guid.Data1 >> 24) & 0xff, &chars[0]);
   byte_to_hex_char16((guid.Data1 >> 16) & 0xff, &chars[2]);
   byte_to_hex_char16((guid.Data1 >> 8)  & 0xff, &chars[4]);
@@ -24,7 +24,7 @@ void guid_to_hex_char16(EFI_GUID guid, CHAR16* chars) {
   chars[35] = 0;
 }
 
-CHAR16* newline_char16 = L"\r\n";
+uint16_t* newline_char16 = L"\r\n";
 
 int guid_equal(EFI_GUID g1, EFI_GUID g2) {
   return g1.Data1 == g2.Data1 &&
