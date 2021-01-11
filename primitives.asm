@@ -1,7 +1,7 @@
 ; UEFI calling parameters: rcx, rdx, r8, r9, stack...
 ;
 
-section '.text' code executable readable
+section .text code executable readable
 ;;;;;;;;
 ; Input from Port
 global inb

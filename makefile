@@ -8,7 +8,7 @@ lflags = -subsystem:efi_application -nodefaultlib -dll -timestamp:12345
 all : hello-c.efi
 
 hello-c.efi : hello-c.obj primitives.obj serial.obj strings.obj efi_util.obj \
-              descriptor_tables.obj scheduler.obj examples.obj
+              descriptor_tables.obj scheduler.obj examples.obj msabi-runtime.obj
 	$(ld) $(lflags) -entry:efi_main $^ -out:$@
 
 hello-c.obj : hello-c.c primitives.h serial.h strings.h efi_util.h acpi.h scheduler.h

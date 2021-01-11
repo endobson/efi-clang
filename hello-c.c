@@ -632,6 +632,15 @@ TaskDescriptor serial_task;
 uint8_t network_task_stack[8192];
 TaskDescriptor network_task;
 
+// Callback used by yaspl serial task
+void serial_task_callback(uint64_t v) {
+  char* writer = writer_buffer;
+  writer_add_cstr(&writer, "Callback: ");
+  writer_add_hex8(&writer, v);
+  writer_add_newline(&writer);
+  writer_terminate(&writer);
+  write_serial_cstr(writer_buffer);
+}
 
 void serial_task_start() {
   while (1) {
@@ -1036,12 +1045,13 @@ void network_task_start() {
 }
 
 
+void yos_serialTaskStart();
+
 void add_initial_tasks() {
-  add_task(&serial_task, &serial_task_stack[8192], serial_task_start);
+  add_task(&serial_task, &serial_task_stack[8192], yos_serialTaskStart);
+  //add_task(&serial_task, &serial_task_stack[8192], serial_task_start);
   add_task(&network_task, &network_task_stack[8192], network_task_start);
 }
-
-uint8_t yos_a(uint8_t a);
 
 EFI_STATUS efi_main(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st)
 {
@@ -1052,14 +1062,6 @@ EFI_STATUS efi_main(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st)
     //  st->StdErr->OutputString(st->StdErr, newline_char16);
     //  return EFI_NOT_FOUND;
     //}
-    {
-      uint16_t buf[3];
-      st->StdErr->OutputString(st->StdErr, L"YASPL Value: ");
-      byte_to_hex_char16(yos_a(65), &buf[0]);
-      buf[2] = 0;
-      st->StdErr->OutputString(st->StdErr, buf);
-      st->StdErr->OutputString(st->StdErr, newline_char16);
-    }
 
     EFI_STATUS s = exit_boot_services(ih, st);
     if (s != EFI_SUCCESS) {
