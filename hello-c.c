@@ -1036,6 +1036,8 @@ void network_task_start() {
 
 
 void yos_serialTaskStart();
+void yos_welcomeMessage();
+void call_sysv0(void* f);
 
 void add_initial_tasks() {
   add_task(&serial_task, &serial_task_stack[8192], yos_serialTaskStart);
@@ -1076,8 +1078,8 @@ EFI_STATUS efi_main(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st)
     enable_interrupts();
 
     // Print hello message.
-    write_serial_cstr("\033c");
-    write_serial_cstr("Welcome to Yaspl OS.\r\n");
+    call_sysv0(yos_welcomeMessage);
+
     // Run the main OS loop
     run_scheduler_loop();
 
