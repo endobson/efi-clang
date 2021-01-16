@@ -632,16 +632,6 @@ TaskDescriptor serial_task;
 uint8_t network_task_stack[8192];
 TaskDescriptor network_task;
 
-// Callback used by yaspl serial task
-void serial_task_callback(uint64_t v) {
-  char* writer = writer_buffer;
-  writer_add_cstr(&writer, "Callback: ");
-  writer_add_hex8(&writer, v);
-  writer_add_newline(&writer);
-  writer_terminate(&writer);
-  write_serial_cstr(writer_buffer);
-}
-
 void serial_task_start() {
   while (1) {
     char c = read_serial();
