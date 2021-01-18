@@ -112,7 +112,7 @@ void writer_add_hex64(char** writer, uint64_t v) {
 // Static array to make printing debug messages easier
 char writer_buffer_array[4096];
 
-char* writer_buffer = (char*) writer_buffer_array;
+char* const writer_buffer = (char* const) writer_buffer_array;
 
 // Memset
 void my_memset(uint8_t* ptr, uint8_t v, int amt) {

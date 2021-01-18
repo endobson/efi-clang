@@ -32,7 +32,7 @@ void writer_add_hex32(char** writer, uint32_t v);
 void writer_add_hex64(char** writer, uint64_t v);
 
 // Static buffer to make printing debug messages easier
-extern char* writer_buffer;
+extern char* const writer_buffer;
 
 // Memset
 void my_memset(uint8_t* ptr, uint8_t v, int amt);

@@ -24,7 +24,7 @@ void guid_to_hex_char16(EFI_GUID guid, uint16_t* chars) {
   chars[35] = 0;
 }
 
-uint16_t* newline_char16 = L"\r\n";
+uint16_t* const newline_char16 = L"\r\n";
 
 int guid_equal(EFI_GUID g1, EFI_GUID g2) {
   return g1.Data1 == g2.Data1 &&
