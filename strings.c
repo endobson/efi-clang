@@ -74,7 +74,10 @@ void writer_add_newline(char** writer) {
 }
 
 void writer_terminate(char** writer) {
-  writer_add_bytes(writer, "", 1);
+  // Don't use "" string literal.
+  // Hack to avoid string sharing in linker
+  **writer = 0;
+  (*writer)++;
 }
 
 void writer_add_hex8(char** writer, uint8_t v) {

@@ -32,6 +32,9 @@ descriptor_tables.obj : descriptor_tables.c descriptor_tables.h primitives.h
 scheduler.obj : scheduler.c scheduler.h
 	$(cc) $(cflags) -c $< -o $@
 	
+test.efi : strings.obj
+	$(ld) $(lflags) -entry:my_memset $^ -out:$@
+
 
 .PHONY : clean
 clean:
