@@ -31,9 +31,13 @@ descriptor_tables.obj : descriptor_tables.c descriptor_tables.h primitives.h
 
 scheduler.obj : scheduler.c scheduler.h
 	$(cc) $(cflags) -c $< -o $@
+
+test.obj : test.c
+	$(cc) $(cflags) -c $< -o $@
 	
-test.efi : strings.obj
-	$(ld) $(lflags) -entry:my_memset $^ -out:$@
+test.efi : strings.obj hello-c.obj primitives.obj scheduler.obj descriptor_tables.obj \
+           efi_util.obj serial.obj msabi-runtime.obj examples.obj
+	$(ld) $(lflags) -entry:efi_main $^ -out:$@
 
 
 .PHONY : clean

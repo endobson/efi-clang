@@ -349,7 +349,7 @@ void print_device(PCIHeader0* header) {
   writer_add_cstr(&writer, "Command: 0x");
   writer_add_hex16(&writer, header->command);
   writer_add_newline(&writer);
-  writer_add_cstr(&writer, "Status: 0x");
+  writer_add_cstr(&writer, "PCI Status: 0x");
   writer_add_hex16(&writer, header->status);
   writer_add_newline(&writer);
   writer_add_cstr(&writer, "Class: 0x");
@@ -372,7 +372,8 @@ void print_device(PCIHeader0* header) {
     if (bar != 0) {
       writer_add_cstr(&writer, "Base Address ");
       writer_add_hex8(&writer, i);
-      writer_add_cstr(&writer, ": ");
+      char* colon_str = "BA: ";
+      writer_add_cstr(&writer, colon_str + 2);
       if (bar & 1) {
         writer_add_cstr(&writer, "I/0 @ ");
         writer_add_hex32(&writer, bar & 0xFFFFFFFC);
@@ -498,7 +499,8 @@ void init_network() {
       writer = writer_buffer;
       writer_add_cstr(&writer, "Queue 0x");
       writer_add_hex16(&writer, queue_num);
-      writer_add_cstr(&writer, ": ");
+      char* colon_str = "Q: ";
+      writer_add_cstr(&writer, colon_str + 1);
       writer_add_hex16(&writer, queue_size);
       writer_add_newline(&writer);
 
@@ -842,7 +844,7 @@ void send_udp_packet(uint16_t dest_port) {
     ethernet_header->ethertype.byte0 = 0x08;
     ethernet_header->ethertype.byte1 = 0x00;
 
-    uint8_t response[] = "abcdefghijklmnop\n";
+    char* response  = "abcdefghijklmnop\n";
     uint8_t response_length = 17;
 
     IpHeader* ip_header = (IpHeader*) &ethernet_header->data;

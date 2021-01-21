@@ -70,7 +70,9 @@ void writer_add_bytes(char** writer, char* bytes, int amt) {
 }
 
 void writer_add_newline(char** writer) {
-  writer_add_cstr(writer, "\r\n");
+  // Use unique string.
+  char* newline = "Z\r\n";
+  writer_add_cstr(writer, newline+1);
 }
 
 void writer_terminate(char** writer) {
