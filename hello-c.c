@@ -1039,7 +1039,10 @@ void network_task_start() {
 
 void yos_serialTaskStart();
 void yos_welcomeMessage();
+void yos_testEfiPrinter(void *, void *);
 void call_sysv0(void* f);
+void call_sysv1(void* f, void* v1);
+void call_sysv2(void* f, void* v1, void* v2);
 
 void add_initial_tasks() {
   add_task(&serial_task, &serial_task_stack[8192], yos_serialTaskStart);
@@ -1056,6 +1059,8 @@ EFI_STATUS efi_main(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st)
     //  st->StdErr->OutputString(st->StdErr, newline_char16);
     //  return EFI_NOT_FOUND;
     //}
+
+    call_sysv1(yos_testEfiPrinter, st);
 
     EFI_STATUS s = exit_boot_services(ih, st);
     if (s != EFI_SUCCESS) {
