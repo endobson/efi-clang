@@ -7,11 +7,11 @@ lflags = -subsystem:efi_application -nodefaultlib -dll -timestamp:0
 
 all : hello-c.efi
 
-hello-c.efi : hello-c.obj primitives.obj serial.obj strings.obj efi_util.obj \
+hello-c.efi : hello-c.obj primitives.obj serial.obj strings.obj \
               descriptor_tables.obj scheduler.obj examples.obj msabi-runtime.obj
 	$(ld) $(lflags) -entry:efi_main $^ -out:$@
 
-hello-c.obj : hello-c.c primitives.h serial.h strings.h efi_util.h acpi.h scheduler.h
+hello-c.obj : hello-c.c primitives.h serial.h strings.h acpi.h scheduler.h
 	$(cc) $(cflags) -c $< -o $@
 
 primitives.obj : primitives.asm primitives.h
@@ -21,9 +21,6 @@ serial.obj : serial.c serial.h
 	$(cc) $(cflags) -c $< -o $@
 
 strings.obj : strings.c strings.h
-	$(cc) $(cflags) -c $< -o $@
-
-efi_util.obj : efi_util.c efi_util.h strings.h
 	$(cc) $(cflags) -c $< -o $@
 
 descriptor_tables.obj : descriptor_tables.c descriptor_tables.h primitives.h
@@ -36,7 +33,7 @@ test.obj : test.c
 	$(cc) $(cflags) -c $< -o $@
 	
 test.efi : strings.obj hello-c.obj primitives.obj scheduler.obj descriptor_tables.obj \
-           efi_util.obj serial.obj msabi-runtime.obj examples.obj
+           serial.obj msabi-runtime.obj examples.obj
 	$(ld) $(lflags) -entry:efi_main $^ -out:$@
 
 

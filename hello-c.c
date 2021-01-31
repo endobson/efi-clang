@@ -1,7 +1,6 @@
 #include "acpi.h"
 #include "descriptor_tables.h"
 #include "efi.h"
-#include "efi_util.h"
 #include "primitives.h"
 #include "serial.h"
 #include "scheduler.h"
@@ -36,28 +35,24 @@ EFI_STATUS exit_boot_services(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st) {
   EFI_STATUS s;
   s = st->BootServices->GetMemoryMap(&memory_map_size, memory_map, &memory_map_key, &descriptor_size, &descriptor_version);
   if (s != EFI_BUFFER_TOO_SMALL) {
-    st->StdErr->OutputString(st->StdErr, L"Unable to get memory map size");
-    st->StdErr->OutputString(st->StdErr, newline_char16);
+    st->StdErr->OutputString(st->StdErr, L"Unable to get memory map size\r\n");
     return s;
   }
   s = st->BootServices->AllocatePool(EfiLoaderData, memory_map_size, (void **)&memory_map);
   if (s != EFI_SUCCESS) {
-    st->StdErr->OutputString(st->StdErr, L"Unable to get allocate pool");
-    st->StdErr->OutputString(st->StdErr, newline_char16);
+    st->StdErr->OutputString(st->StdErr, L"Unable to get allocate pool\r\n");
     return s;
   }
   s = st->BootServices->GetMemoryMap(&memory_map_size, memory_map, &memory_map_key, &descriptor_size, &descriptor_version);
   if (s != EFI_SUCCESS) {
-    st->StdErr->OutputString(st->StdErr, L"Unable to get memory map");
-    st->StdErr->OutputString(st->StdErr, newline_char16);
+    st->StdErr->OutputString(st->StdErr, L"Unable to get memory map\r\n");
     return s;
   }
 
   // Try to Exit UEFI
   s = st->BootServices->ExitBootServices(ih, memory_map_key);
   if (s != EFI_SUCCESS) {
-    st->StdErr->OutputString(st->StdErr, L"Unable to get exit boot services");
-    st->StdErr->OutputString(st->StdErr, newline_char16);
+    st->StdErr->OutputString(st->StdErr, L"Unable to get exit boot services\r\n");
     return s;
   }
 
@@ -1053,12 +1048,6 @@ void add_initial_tasks() {
 EFI_STATUS efi_main(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st)
 {
     //RSDPDescriptor* rsdp = find_rsdp(st);
-
-    //if (rsdp == 0) {
-    //  st->StdErr->OutputString(st->StdErr, L"Unable to get RSDP acpi table");
-    //  st->StdErr->OutputString(st->StdErr, newline_char16);
-    //  return EFI_NOT_FOUND;
-    //}
 
     call_sysv1(yos_testEfiPrinter, st);
 
