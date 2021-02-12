@@ -1034,10 +1034,11 @@ void network_task_start() {
 
 void yos_serialTaskStart();
 void yos_welcomeMessage();
-void yos_testEfiPrinter(void *, void *);
-void call_sysv0(void* f);
-void call_sysv1(void* f, void* v1);
-void call_sysv2(void* f, void* v1, void* v2);
+void yos_exitBootServices(void *, void *);
+void yos_initializeIdt();
+void* call_sysv0(void* f);
+void* call_sysv1(void* f, void* v1);
+void* call_sysv2(void* f, void* v1, void* v2);
 
 void add_initial_tasks() {
   add_task(&serial_task, &serial_task_stack[8192], yos_serialTaskStart);
@@ -1049,9 +1050,7 @@ EFI_STATUS efi_main(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st)
 {
     //RSDPDescriptor* rsdp = find_rsdp(st);
 
-    call_sysv1(yos_testEfiPrinter, st);
-
-    EFI_STATUS s = exit_boot_services(ih, st);
+    EFI_STATUS s = (EFI_STATUS) call_sysv2(yos_exitBootServices, ih, st);
     if (s != EFI_SUCCESS) {
       return s;
     }
@@ -1062,6 +1061,8 @@ EFI_STATUS efi_main(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st)
 
     // TODO Actually set up the GDT
     // initialize_gdt();
+
+    call_sysv0(yos_initializeIdt);
 
     init_idt();
     init_serial();
