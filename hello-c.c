@@ -842,57 +842,20 @@ void network_task_start() {
 }
 
 
-void yos_serialTaskStart();
-void yos_welcomeMessage();
 void yos_exitBootServices(void *, void *);
-void yos_initializeIdt();
-void yos_initializeSerial();
-void yos_initializePic();
-void yos_initializeNetwork();
-void yos_initializeScheduler();
-void yos_addInitialTasks();
-void yos_runSchedulerLoop();
+void yos_postBootServices();
 void* call_sysv0(void* f);
 void* call_sysv1(void* f, void* v1);
 void* call_sysv2(void* f, void* v1, void* v2);
 
 EFI_STATUS efi_main(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st)
 {
-    //RSDPDescriptor* rsdp = find_rsdp(st);
-
     EFI_STATUS s = (EFI_STATUS) call_sysv2(yos_exitBootServices, ih, st);
     if (s != EFI_SUCCESS) {
       return s;
     }
-    // UEFI is now finished.
-    // Start initializing sub systems.
+    call_sysv0(yos_postBootServices);
 
-    // check_acpi_tables(rsdp);
-
-    // TODO Actually set up the GDT
-    // initialize_gdt();
-
-    call_sysv0(yos_initializeIdt);
-    call_sysv0(yos_initializeSerial);
-    call_sysv0(yos_initializePic);
-    if (((uint64_t) call_sysv0(yos_initializeNetwork)) != 0) {
-      write_serial_cstr("Network initialization failed\r\n");
-      panic();
-    }
-
-    call_sysv0(yos_initializeScheduler);
-    call_sysv0(yos_addInitialTasks);
-
-    enable_interrupts();
-
-    // Print hello message.
-    call_sysv0(yos_welcomeMessage);
-
-    // Run the main OS loop
-    call_sysv0(yos_runSchedulerLoop);
-    // run_scheduler_loop();
-
-    // Shutdown
-    st->RuntimeServices->ResetSystem(EfiResetShutdown, EFI_SUCCESS, 0, 0);
-    return(EFI_SUCCESS);
+    panic();
+    return EFI_SUCCESS;
 }
