@@ -46,7 +46,7 @@ outl:
   ret
 
 ;;;;;;;;
-extern mark_all_runnable
+extern yos_markAllRunnable
 
 ; extern irqhandler
 global irqfun_default
@@ -65,17 +65,21 @@ irqfun_com1:
   push rax
   push rcx
   push rdx
+  push rdi
+  push rsi
   push r8
   push r9
   push r10
   push r11
 
-  call mark_all_runnable
+  call yos_markAllRunnable
 
   pop r11
   pop r10
   pop r9
   pop r8
+  pop rsi
+  pop rdi
   pop rdx
   pop rcx
   pop rax
@@ -106,17 +110,21 @@ irqfun_nic:
   push rax
   push rcx
   push rdx
+  push rdi
+  push rsi
   push r8
   push r9
   push r10
   push r11
 
-  call mark_all_runnable
+  call yos_markAllRunnable
 
   pop r11
   pop r10
   pop r9
   pop r8
+  pop rsi
+  pop rdi
   pop rdx
   pop rcx
   pop rax

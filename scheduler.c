@@ -61,17 +61,6 @@ void add_task(TaskDescriptor* task, void* stack, void* func) {
 }
 
 
-// Marks all the tasks runnable. Used by the interrupt handlers to unblock tasks.
-//
-// Must be called with interrupts disabled.
-void mark_all_runnable() {
-  TaskDescriptor* task = current_task;
-  do {
-    task->state = TaskState_Runnable;
-    task = task->next;
-  } while (task != current_task);
-}
-
 
 void init_scheduler() {
   // Initialize root_task
