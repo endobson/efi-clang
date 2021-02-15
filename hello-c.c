@@ -850,15 +850,10 @@ void yos_initializeSerial();
 void yos_initializePic();
 void yos_initializeNetwork();
 void yos_initializeScheduler();
+void yos_addInitialTasks();
 void* call_sysv0(void* f);
 void* call_sysv1(void* f, void* v1);
 void* call_sysv2(void* f, void* v1, void* v2);
-
-void add_initial_tasks() {
-  add_task(&serial_task, &serial_task_stack[8192], yos_serialTaskStart);
-  //add_task(&serial_task, &serial_task_stack[8192], serial_task_start);
-  add_task(&network_task, &network_task_stack[8192], network_task_start);
-}
 
 EFI_STATUS efi_main(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st)
 {
@@ -885,10 +880,7 @@ EFI_STATUS efi_main(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st)
     }
 
     call_sysv0(yos_initializeScheduler);
-
-    // init_scheduler();
-
-    add_initial_tasks();
+    call_sysv0(yos_addInitialTasks);
 
     enable_interrupts();
 
