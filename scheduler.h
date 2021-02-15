@@ -2,8 +2,8 @@
 #define SCHEDULER_H_
 
 typedef enum TaskState {
-  TaskState_Runnable,
-  TaskState_Blocked,
+  TaskState_Runnable = 0,
+  TaskState_Blocked = 1,
 } TaskState;
 
 typedef struct TaskDescriptor {

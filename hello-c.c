@@ -849,6 +849,7 @@ void yos_initializeIdt();
 void yos_initializeSerial();
 void yos_initializePic();
 void yos_initializeNetwork();
+void yos_initializeScheduler();
 void* call_sysv0(void* f);
 void* call_sysv1(void* f, void* v1);
 void* call_sysv2(void* f, void* v1, void* v2);
@@ -883,7 +884,9 @@ EFI_STATUS efi_main(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st)
       panic();
     }
 
-    init_scheduler();
+    call_sysv0(yos_initializeScheduler);
+
+    // init_scheduler();
 
     add_initial_tasks();
 
