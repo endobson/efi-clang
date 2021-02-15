@@ -851,6 +851,7 @@ void yos_initializePic();
 void yos_initializeNetwork();
 void yos_initializeScheduler();
 void yos_addInitialTasks();
+void yos_runSchedulerLoop();
 void* call_sysv0(void* f);
 void* call_sysv1(void* f, void* v1);
 void* call_sysv2(void* f, void* v1, void* v2);
@@ -888,7 +889,8 @@ EFI_STATUS efi_main(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st)
     call_sysv0(yos_welcomeMessage);
 
     // Run the main OS loop
-    run_scheduler_loop();
+    call_sysv0(yos_runSchedulerLoop);
+    // run_scheduler_loop();
 
     // Shutdown
     st->RuntimeServices->ResetSystem(EfiResetShutdown, EFI_SUCCESS, 0, 0);

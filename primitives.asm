@@ -166,25 +166,6 @@ halt:
   hlt
   ret
 
-; Enable interrupts and wait for one.
-global enable_interrupts_and_halt
-enable_interrupts_and_halt:
-  sti
-  hlt
-  ret
-
-; Disable interrupts
-global disable_interrupts
-disable_interrupts:
-  cli
-  ret
-
-; Enable interrupts
-global enable_interrupts
-enable_interrupts:
-  sti
-  ret
-
 ; Panic, and stop forever
 ; Disables interupts
 global panic
