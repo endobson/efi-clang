@@ -1010,6 +1010,7 @@ void yos_serialTaskStart();
 void yos_welcomeMessage();
 void yos_exitBootServices(void *, void *);
 void yos_initializeIdt();
+void yos_initializeSerial();
 void* call_sysv0(void* f);
 void* call_sysv1(void* f, void* v1);
 void* call_sysv2(void* f, void* v1, void* v2);
@@ -1037,8 +1038,8 @@ EFI_STATUS efi_main(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st)
     // initialize_gdt();
 
     call_sysv0(yos_initializeIdt);
+    call_sysv0(yos_initializeSerial);
 
-    init_serial();
     init_pic();
     init_network();
     init_scheduler();

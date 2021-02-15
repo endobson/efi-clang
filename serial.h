@@ -15,7 +15,4 @@ char read_serial();
 
 void drain_serial();
 
-// Configures the serial port.
-void init_serial();
-
 #endif // SERIAL_H_

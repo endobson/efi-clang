@@ -49,23 +49,3 @@ void drain_serial() {
     inb(SERIAL_COM1_BASE);
   }
 }
-
-
-void init_serial() {
-   uint16_t port = SERIAL_COM1_BASE;
-   // Disable all interrupts on the port while setup happens
-   outb(0x00, port + 1);
-   // Enable the DLAB. This changes the meaning of ports 0/1 which allows
-   // setting the baud rate divisor.
-   outb(0x80, port + 3);
-   // Set divisor to 3 (low byte) 38400 baud
-   outb(0x03, port + 0);
-   outb(0x00, port + 1);
-
-   // Clear the DLAB, and set the protcol as:
-   // 8 bits, no parity, one stop bit
-   outb(0x03, port + 3);
-   // Don't set FIFOs as they don't seem to do anything in QEMU.
-   // Enable IRQs on Receive.
-   outb(0x01, port + 1);
-}
