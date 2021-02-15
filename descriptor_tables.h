@@ -27,9 +27,6 @@ typedef struct GDTEntry {
 
 // The actual staticly allocated descriptor tables.
 
-extern IDTEntry idt_entries[];
-extern IDTDescr idt_descr;
-
 extern GDTEntry gdt_entries[];
 extern GDTDescr gdt_descr;
 

@@ -280,32 +280,6 @@ void init_pic() {
   outb(~pic2_interrupts, pic2_data);
 }
 
-void init_idt() {
-  my_memset((uint8_t*) &idt_entries, 0, sizeof(IDTEntry) * 256);
-  for (int i = 0; i < 256; i++) {
-    uint64_t irq_addr;
-    if (i == 36) {
-      irq_addr = (uint64_t) irqfun_com1;
-    } else if (i == 43) {
-      irq_addr = (uint64_t) irqfun_nic;
-    } else {
-      irq_addr = (uint64_t) irqfun_default;
-    }
-
-    idt_entries[i].offset_1 = irq_addr & 0xffff;
-    idt_entries[i].selector = 0x38;
-    idt_entries[i].ist = 0;
-    idt_entries[i].type_attr = 0x8e;
-    idt_entries[i].offset_2 = (irq_addr >> 16) & 0xffff;
-    idt_entries[i].offset_3 = irq_addr >> 32;
-    idt_entries[i].zero = 0;
-  }
-
-  idt_descr.limit = sizeof(IDTEntry) * 256 - 1;
-  idt_descr.base_addr = (uint64_t) &idt_entries;
-  load_idt(&idt_descr);
-}
-
 typedef struct PCIHeader0 {
   uint16_t vendor_id;
   uint16_t device_id;
@@ -1064,7 +1038,6 @@ EFI_STATUS efi_main(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st)
 
     call_sysv0(yos_initializeIdt);
 
-    init_idt();
     init_serial();
     init_pic();
     init_network();

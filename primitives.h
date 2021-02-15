@@ -38,15 +38,6 @@ void store_gdt(GDTDescr* gdt);
 extern void load_segments(uint16_t code, uint16_t data);
 */
 
-typedef struct IDTDescr {
-  uint16_t limit;
-  uint64_t base_addr;
-} __attribute__ ((packed)) IDTDescr;
-
-// Interrupt Descriptor Table
-// Load the specified IDT;
-void load_idt(IDTDescr* idt);
-
 
 // Assembly routines that handle interrupts.
 // Do not follow standard calling convention.

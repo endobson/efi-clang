@@ -46,12 +46,6 @@ outl:
   ret
 
 ;;;;;;;;
-; Load the specified Interrupt Descriptor Table
-global load_idt
-load_idt:
-  lidt [ecx]
-  ret
-
 extern mark_all_runnable
 
 ; extern irqhandler
