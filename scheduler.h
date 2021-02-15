@@ -18,15 +18,4 @@ typedef struct TaskDescriptor {
 int yield(TaskState new_old_state);
 
 
-// Adds a new task to be run.
-//
-// Must be called with interrupts disabled.
-void add_task(TaskDescriptor* task, void* stack, void* func);
-
-// Set up the initial scheduler data structures.
-void init_scheduler();
-
-// Start the scheduler loop.
-void run_scheduler_loop();
-
 #endif // SCHEDULER_H_
