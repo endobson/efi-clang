@@ -240,45 +240,6 @@ void initialize_gdt() {
   // load_segments(0x08, 0x10);
 }
 
-void init_pic() {
-  // Base port numbers for the Master/Slave PICs.
-  uint8_t pic1 = 0x20;
-  uint8_t pic2 = 0xA0;
-  // Command and data port numbers
-  uint8_t pic1_command = pic1 + 0;
-  uint8_t pic1_data = pic1 + 1;
-  uint8_t pic2_command = pic2 + 0;
-  uint8_t pic2_data = pic2 + 1;
-
-  uint8_t icw1_init = 0x10; // This is an initialization command
-  uint8_t icw1_icw4 = 0x01; // This initialization uses command word 4
-  // Start the initialization sequence (in cascade mode)
-  outb(icw1_init | icw1_icw4, pic1_command);
-  outb(icw1_init | icw1_icw4, pic2_command);
-
-  // Set the PICs to use the entries in the IDT range [32, 47).
-  uint8_t offset1 = 32;
-  uint8_t offset2 = 40;
-  outb(offset1, pic1_data);    // ICW2: Master PIC vector offset
-  outb(offset2, pic2_data);    // ICW2: Slave PIC vector offset
-  outb(0b00000100, pic1_data); // ICW3: tell Master PIC that there is a slave PIC at IRQ2
-  outb(2, pic2_data);          // ICW3: tell Slave PIC its cascade identity
-
-  // Set 8086 mode
-  uint8_t icw4_8086 = 0x01;
-  outb(icw4_8086, pic1_data);
-  outb(icw4_8086, pic2_data);
-
-  // Only enable some interrupts.
-  // PIC 1, bit 2: Allow PIC2 through
-  // PIC 1, bit 4: COM1 serial port
-  uint8_t pic1_interrupts = (1 << 2) | (1 << 4);
-  // PIC 2, bit 3: NIC
-  uint8_t pic2_interrupts = (1 << 3);
-  // Mask all interrupts that shouldn't be enabled.
-  outb(~pic1_interrupts, pic1_data);
-  outb(~pic2_interrupts, pic2_data);
-}
 
 typedef struct PCIHeader0 {
   uint16_t vendor_id;
@@ -405,131 +366,6 @@ typedef struct VirtioBuffer {
 
 VirtioBuffer net_send_buffers[256];
 VirtioBuffer net_recv_buffers[256];
-
-void init_network() {
-  uint64_t base_address = 0x00000000b0000000;
-  int device_num = 2;
-
-  PCIHeader0* header = (PCIHeader0*) (base_address + (device_num << 15));
-  PCIHeader0* header2 = (PCIHeader0*) (base_address + (1 << 15));
-
-  // print_device(header);
-  // print_device(header2);
-
-  int feature_mac = 5;
-  uint16_t device_features_port = 0x00;
-  uint16_t guest_features_port  = 0x04;
-  uint16_t queue_address_port   = 0x08;
-  uint16_t queue_size_port      = 0x0c;
-  uint16_t queue_select_port    = 0x0e;
-  uint16_t device_status_port   = 0x12;
-
-  uint8_t device_acknowledged = 0x01;
-  uint8_t device_driver       = 0x02;
-  uint8_t device_features_ok  = 0x08;
-  uint8_t device_driver_ok    = 0x04;
-
-  uint16_t net_base_port = 0x6060;
-
-
-  // Acknowledge the device.
-  outb(device_acknowledged,
-       net_base_port + device_status_port);
-  // Tell the device that we know how to drive it.
-  outb(device_acknowledged | device_driver,
-       net_base_port + device_status_port);
-
-  uint32_t device_features = inl(net_base_port + device_features_port);
-  if (!(device_features & (1 << feature_mac))) {
-    panic();
-  }
-
-  uint32_t guest_features = (1 << feature_mac);
-  outl(guest_features, net_base_port + guest_features_port);
-
-  // Tell the device that we are finalized on our feature decisions.
-  outb(device_acknowledged | device_driver | device_features_ok,
-       net_base_port + device_status_port);
-
-  int8_t device_status = inb(net_base_port + device_status_port);
-  if (device_status != (device_acknowledged | device_driver | device_features_ok)) {
-    panic();
-  }
-
-  char* writer;
-  for (uint16_t queue_num = 0; queue_num < 2; queue_num ++) {
-    outw(queue_num, net_base_port + queue_select_port);
-    uint16_t queue_size = inw(net_base_port + queue_size_port);
-    if (queue_size != 0x100) {
-      panic();
-    }
-
-    {
-      writer = writer_buffer;
-      writer_add_cstr(&writer, "Queue 0x");
-      writer_add_hex16(&writer, queue_num);
-      char* colon_str = "Q: ";
-      writer_add_cstr(&writer, colon_str + 1);
-      writer_add_hex16(&writer, queue_size);
-      writer_add_newline(&writer);
-
-      writer_terminate(&writer);
-      write_serial_cstr(writer_buffer);
-    }
-  }
-
-  my_memset((uint8_t*) &net_send_queue, 0, sizeof(net_send_queue));
-  my_memset((uint8_t*) &net_recv_queue, 0, sizeof(net_recv_queue));
-
-
-  // Tell the device about our queues
-  outw(0, net_base_port + queue_select_port);
-  outl(((uint64_t) &net_recv_queue) >> 12,
-       net_base_port + queue_address_port);
-
-  outw(1, net_base_port + queue_select_port);
-  outl(((uint64_t) &net_send_queue) >> 12,
-       net_base_port + queue_address_port);
-
-  // Tell the device that we are ready!
-  outb(device_acknowledged | device_driver | device_features_ok | device_driver_ok,
-       net_base_port + device_status_port);
-  device_status = inb(net_base_port + device_status_port);
-  if (device_status != (device_acknowledged | device_driver | device_features_ok | device_driver_ok)) {
-    panic();
-  }
-
-
-  if (0) {
-    writer = writer_buffer;
-    writer_add_cstr(&writer, "Send Queue Addr: ");
-    writer_add_hex64(&writer, (uint64_t) &net_send_queue);
-    writer_add_newline(&writer);
-    writer_add_cstr(&writer, "Send Queue used Addr: ");
-    writer_add_hex64(&writer, (uint64_t) &net_send_queue.used);
-    writer_add_newline(&writer);
-
-    writer_terminate(&writer);
-    write_serial_cstr(writer_buffer);
-  }
-
-  {
-    writer = writer_buffer;
-    writer_add_cstr(&writer, "Devices Features: ");
-    writer_add_hex32(&writer, device_features);
-    writer_add_newline(&writer);
-    writer_add_cstr(&writer, "Guest Features: ");
-    writer_add_hex32(&writer, inl(net_base_port + guest_features_port));
-    writer_add_newline(&writer);
-    writer_add_cstr(&writer, "Device Status: ");
-    writer_add_hex8(&writer, device_status);
-    writer_add_newline(&writer);
-
-    writer_terminate(&writer);
-    write_serial_cstr(writer_buffer);
-  }
-
-}
 
 
 void print_network_status() {
@@ -1011,6 +847,8 @@ void yos_welcomeMessage();
 void yos_exitBootServices(void *, void *);
 void yos_initializeIdt();
 void yos_initializeSerial();
+void yos_initializePic();
+void yos_initializeNetwork();
 void* call_sysv0(void* f);
 void* call_sysv1(void* f, void* v1);
 void* call_sysv2(void* f, void* v1, void* v2);
@@ -1039,9 +877,12 @@ EFI_STATUS efi_main(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st)
 
     call_sysv0(yos_initializeIdt);
     call_sysv0(yos_initializeSerial);
+    call_sysv0(yos_initializePic);
+    if (((uint64_t) call_sysv0(yos_initializeNetwork)) != 0) {
+      write_serial_cstr("Network initialization failed\r\n");
+      panic();
+    }
 
-    init_pic();
-    init_network();
     init_scheduler();
 
     add_initial_tasks();
