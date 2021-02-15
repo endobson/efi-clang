@@ -842,20 +842,3 @@ void network_task_start() {
 }
 
 
-void yos_exitBootServices(void *, void *);
-void yos_postBootServices();
-void* call_sysv0(void* f);
-void* call_sysv1(void* f, void* v1);
-void* call_sysv2(void* f, void* v1, void* v2);
-
-EFI_STATUS efi_main(EFI_HANDLE ih, EFI_SYSTEM_TABLE* st)
-{
-    EFI_STATUS s = (EFI_STATUS) call_sysv2(yos_exitBootServices, ih, st);
-    if (s != EFI_SUCCESS) {
-      return s;
-    }
-    call_sysv0(yos_postBootServices);
-
-    panic();
-    return EFI_SUCCESS;
-}
