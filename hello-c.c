@@ -439,18 +439,6 @@ TaskDescriptor serial_task;
 uint8_t network_task_stack[8192];
 TaskDescriptor network_task;
 
-void serial_task_start() {
-  while (1) {
-    char c = read_serial();
-    char* writer = writer_buffer;
-    writer_add_cstr(&writer, "Console: ");
-    writer_add_hex8(&writer, c);
-    writer_add_newline(&writer);
-    writer_terminate(&writer);
-    write_serial_cstr(writer_buffer);
-  }
-}
-
 void writer_add_hex_buffer(char** writer, uint8_t* buf, int length) {
   int i;
   for (i = 0; i < length; i++) {
