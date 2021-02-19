@@ -6,6 +6,11 @@
 #include "scheduler.h"
 #include "strings.h"
 
+void* call_sysv0(void* f);
+void* call_sysv1(void* f, void* v1);
+void* call_sysv2(void* f, void* v1, void* v2);
+void* yos_sendUdpPacket(void*);
+
 // RSDPDescriptor* find_rsdp(EFI_SYSTEM_TABLE* st) {
 //   for (int i = 0; i < st->NumberOfTableEntries; i++) {
 //       EFI_CONFIGURATION_TABLE ct = st->ConfigurationTable[i];
@@ -809,7 +814,8 @@ void wait_network_interrupt() {
       }
       UdpHeader* udp_header = (UdpHeader*) &ip_header->data;
 
-      send_udp_packet(be_u16_to_le(udp_header->source_port));
+      // send_udp_packet(be_u16_to_le(udp_header->source_port));
+      call_sysv1(yos_sendUdpPacket, (void*) ((intptr_t) be_u16_to_le(udp_header->source_port)));
 
       if (remaining_packet_length != be_u16_to_le(udp_header->length)) {
         panic();
