@@ -379,12 +379,8 @@ uint8_t network_task_stack[8192];
 
 
 
+void scheduler_start_task(void (*func)()) {
+  enable_interrupts();
 
-void network_task_start() {
-  int num_network_packets;
-  while (1) {
-    call_sysv0(yos_waitNetworkInterrupt);
-  }
+  func();
 }
-
-
