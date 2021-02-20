@@ -378,9 +378,3 @@ uint8_t serial_task_stack[8192];
 uint8_t network_task_stack[8192];
 
 
-
-void scheduler_start_task(void (*func)()) {
-  enable_interrupts();
-
-  func();
-}
