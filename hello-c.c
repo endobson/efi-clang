@@ -375,10 +375,7 @@ VirtioBuffer net_send_buffers[256];
 VirtioBuffer net_recv_buffers[256];
 
 uint8_t serial_task_stack[8192];
-TaskDescriptor serial_task;
-
 uint8_t network_task_stack[8192];
-TaskDescriptor network_task;
 
 
 
