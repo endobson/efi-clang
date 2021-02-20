@@ -10,6 +10,7 @@ void* call_sysv0(void* f);
 void* call_sysv1(void* f, void* v1);
 void* call_sysv2(void* f, void* v1, void* v2);
 void* yos_sendUdpPacket(void*);
+void* yos_sendArpPacket();
 
 // RSDPDescriptor* find_rsdp(EFI_SYSTEM_TABLE* st) {
 //   for (int i = 0; i < st->NumberOfTableEntries; i++) {
@@ -790,7 +791,8 @@ void wait_network_interrupt() {
         panic();
       }
 
-      send_arp_packet();
+      //send_arp_packet();
+      call_sysv0(yos_sendArpPacket);
     } else if (ethernet_header->ethertype.byte0 == 0x08 &&
                ethernet_header->ethertype.byte1 == 0x00) {
       write_serial_cstr("IPv4 packet\r\n");
