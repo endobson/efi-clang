@@ -11,6 +11,7 @@ void* call_sysv1(void* f, void* v1);
 void* call_sysv2(void* f, void* v1, void* v2);
 void* yos_sendUdpPacket(void*);
 void* yos_sendArpPacket();
+void* yos_waitNetworkInterrupt();
 
 // RSDPDescriptor* find_rsdp(EFI_SYSTEM_TABLE* st) {
 //   for (int i = 0; i < st->NumberOfTableEntries; i++) {
@@ -833,7 +834,7 @@ void wait_network_interrupt() {
 void network_task_start() {
   int num_network_packets;
   while (1) {
-    wait_network_interrupt();
+    call_sysv0(yos_waitNetworkInterrupt);
   }
 }
 
